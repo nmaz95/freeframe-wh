@@ -8,6 +8,7 @@ from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.project import Project, ProjectMember, ProjectRole
 from ..models.asset import Asset, AssetVersion, MediaFile, ProcessingStatus
+from ..models.pipeline import PipelineRoleAssignment
 from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectMemberResponse, AddProjectMemberRequest, UpdateProjectMemberRequest
 from ..tasks.email_tasks import send_project_added_email
 from ..tasks.celery_app import send_task_safe
@@ -247,6 +248,11 @@ def remove_project_member(project_id: uuid.UUID, user_id: uuid.UUID, db: Session
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
     member.deleted_at = datetime.now(timezone.utc)
+    # Someone who can no longer see the project holds no pipeline role in it.
+    db.query(PipelineRoleAssignment).filter(
+        PipelineRoleAssignment.project_id == project_id,
+        PipelineRoleAssignment.user_id == user_id,
+    ).delete(synchronize_session=False)
     db.commit()
 
 ALLOWED_POSTER_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}

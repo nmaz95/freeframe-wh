@@ -31,6 +31,13 @@ describe('sortAssets', () => {
     expect(ids(sortAssets(list, 'status', 'asc'))).toEqual(['3', '2', '1'])
   })
 
+  it('sorts by the pipeline order when given one', () => {
+    // The instance's statuses, by position: approved first here, in_review last.
+    const rank = (x: { status: AssetStatus }) => ({ approved: 0, draft: 1, in_review: 2, rejected: 3, archived: 4 })[x.status]
+    expect(ids(sortAssets(list, 'status', 'asc', rank))).toEqual(['1', '2', '3'])
+    expect(ids(sortAssets(list, 'status', 'desc', rank))).toEqual(['3', '2', '1'])
+  })
+
   it('sorts by type', () => {
     expect(ids(sortAssets(list, 'type', 'asc'))).toEqual(['3', '1', '2'])
   })

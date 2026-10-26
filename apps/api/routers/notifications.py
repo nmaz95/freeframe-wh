@@ -67,6 +67,12 @@ def list_notifications(
                         actor_name = guest.name
                         actor_is_guest = True
 
+        # A status change has no comment to name its actor through.
+        if actor_name is None and n.actor_id:
+            actor = db.query(User).filter(User.id == n.actor_id).first()
+            if actor:
+                actor_name = actor.name
+
         results.append(NotificationResponse(
             id=n.id,
             type=n.type,
@@ -79,6 +85,8 @@ def list_notifications(
             actor_is_guest=actor_is_guest,
             comment_preview=comment_preview,
             project_id=project_id,
+            actor_id=n.actor_id,
+            payload=n.payload,
         ))
 
     return results

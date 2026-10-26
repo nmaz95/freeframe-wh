@@ -16,7 +16,13 @@ export type ProjectType = "personal" | "team";
 
 export type SharePermission = "view" | "comment" | "approve";
 
-export type NotificationType = "mention" | "assignment" | "due_soon" | "comment" | "approval";
+export type NotificationType =
+  | "mention"
+  | "assignment"
+  | "due_soon"
+  | "comment"
+  | "approval"
+  | "status_change";
 
 export type UserStatus = "active" | "deactivated" | "pending_invite" | "pending_verification";
 
@@ -27,7 +33,8 @@ export type ActivityAction =
   | "shared"
   | "assigned"
   | "approved"
-  | "rejected";
+  | "rejected"
+  | "status_changed";
 
 export type FileType = "image" | "audio" | "video" | "document";
 
@@ -121,7 +128,10 @@ export interface Asset {
   name: string;
   description: string | null;
   asset_type: AssetType;
+  /** @deprecated The fixed enum a status used to be; read `status_id`. */
   status: AssetStatus;
+  /** The instance-defined status (see `AssetStatusDef`); null or absent is the default. */
+  status_id?: string | null;
   rating: number | null;
   assignee_id: string | null;
   folder_id: string | null;
@@ -450,6 +460,50 @@ export interface Notification {
   actor_is_guest?: boolean;
   comment_preview: string | null;
   project_id: string | null;
+  actor_id?: string | null;
+  /** What a `status_change` said, as it was said. */
+  payload?: StatusChangePayload | null;
+}
+
+export interface StatusChangePayload {
+  status_id: string;
+  status_name: string;
+  status_color: string;
+  from_status_name: string | null;
+}
+
+// ─── Asset statuses & pipeline roles ─────────────────────────────────────────
+
+/** One of the instance's asset statuses, admin-managed, in pipeline order. */
+export interface AssetStatusDef {
+  id: string;
+  name: string;
+  /** #rrggbb */
+  color: string;
+  position: number;
+  is_default: boolean;
+  notify_creator: boolean;
+  notify_assignee: boolean;
+  /** Pipeline roles told when an asset is moved to this status. */
+  notify_role_ids: string[];
+  legacy_key: string | null;
+}
+
+/** A named slot people hold per project ("PM", "Editor"), with per-asset overrides. */
+export interface PipelineRole {
+  id: string;
+  name: string;
+}
+
+export interface RoleAssignmentEntry {
+  role_id: string;
+  user_ids: string[];
+}
+
+export interface RoleAssignments {
+  project_defaults: RoleAssignmentEntry[];
+  /** Only on an asset's response; a role with any override uses it instead of the default. */
+  overrides: RoleAssignmentEntry[];
 }
 
 // ─── Branding & Watermarking ──────────────────────────────────────────────────

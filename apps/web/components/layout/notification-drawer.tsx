@@ -7,6 +7,7 @@ import {
   UserCheck,
   MessageSquare,
   CheckCircle,
+  CircleDot,
   X,
   Settings,
 } from 'lucide-react'
@@ -23,6 +24,7 @@ const notificationIcons: Record<NotificationType, React.ElementType> = {
   due_soon: UserCheck,
   comment: MessageSquare,
   approval: CheckCircle,
+  status_change: CircleDot,
 }
 
 function getNotificationText(n: Notification): { title: string; subtitle: string | null } {
@@ -39,6 +41,11 @@ function getNotificationText(n: Notification): { title: string; subtitle: string
       return { title: `${actor} updated approval on ${asset}`, subtitle: null }
     case 'due_soon':
       return { title: `${asset} is due soon`, subtitle: null }
+    case 'status_change': {
+      const to = n.payload?.status_name ?? 'a new status'
+      const from = n.payload?.from_status_name
+      return { title: `${actor} moved ${asset} to ${to}`, subtitle: from ? `was ${from}` : null }
+    }
     default:
       return { title: 'New notification', subtitle: null }
   }
@@ -77,7 +84,14 @@ function NotificationItem({ notification, onClose }: { notification: Notificatio
           notification.type === 'comment' && 'bg-bg-tertiary text-text-secondary',
           (notification.type === 'assignment' || notification.type === 'due_soon') &&
             'bg-status-warning/15 text-status-warning',
+          notification.type === 'status_change' && 'bg-bg-tertiary',
         )}
+        // A status change wears its status's colour, which is not a theme token.
+        style={
+          notification.type === 'status_change' && notification.payload?.status_color
+            ? { color: notification.payload.status_color }
+            : undefined
+        }
       >
         <Icon className="h-3.5 w-3.5" />
       </div>

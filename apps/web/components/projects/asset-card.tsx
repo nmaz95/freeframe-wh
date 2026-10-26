@@ -3,7 +3,8 @@
 import * as React from 'react'
 import { Film, Music, Image as ImageIcon, Images, MoreHorizontal, Check } from 'lucide-react'
 import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
-import type { Asset, AssetType, DownloadOption, User } from '@/types'
+import type { Asset, AssetStatusDef, AssetType, DownloadOption, User } from '@/types'
+import { StatusDot } from '@/components/shared/status-badge'
 import { ContextMenuArea, DotsMenu } from '@/components/shared/item-menu'
 import { CommentCountBadge } from '@/components/shared/comment-count-badge'
 import { AssetMenuItems } from './menus/asset-menu'
@@ -41,6 +42,11 @@ interface AssetCardProps {
   loadDownloadOptions?: () => Promise<DownloadOption[] | null>
   onRename?: () => void
   onDelete?: () => void
+  /** The asset's status, shown as a dot on the thumbnail. */
+  status?: AssetStatusDef | null
+  /** With these, the menu offers "Set status". */
+  statuses?: AssetStatusDef[]
+  onSetStatus?: (status: AssetStatusDef) => void
   /** Shown on right-click instead of the asset's own menu: the grid passes the
    *  selection's menu when this asset is one of several selected. */
   contextMenu?: React.ReactNode
@@ -83,6 +89,9 @@ export function AssetCard({
   loadDownloadOptions,
   onRename,
   onDelete,
+  status,
+  statuses,
+  onSetStatus,
   contextMenu,
   fileSize,
   showInfo = true,
@@ -105,6 +114,9 @@ export function AssetCard({
       loadDownloadOptions={loadDownloadOptions}
       onRename={onRename}
       onDelete={onDelete}
+      statuses={statuses}
+      currentStatusId={status?.id ?? null}
+      onSetStatus={onSetStatus}
     />
   )
 
@@ -160,6 +172,13 @@ export function AssetCard({
           >
             <Check className="h-3.5 w-3.5" />
           </button>
+        )}
+
+        {/* Status dot — top-right */}
+        {status && (
+          <span className="absolute top-2 right-2 flex h-4 w-4 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
+            <StatusDot color={status.color} size="md" title={status.name} />
+          </span>
         )}
 
         {/* Duration badge — bottom-right (for video/audio) */}

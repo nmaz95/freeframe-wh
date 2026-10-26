@@ -69,6 +69,7 @@ celery_app.conf.update(
         "apps.api.tasks.email_tasks.send_assignment_email": {"queue": "email_low"},
         "apps.api.tasks.email_tasks.send_share_email": {"queue": "email_low"},
         "apps.api.tasks.email_tasks.send_approval_email": {"queue": "email_low"},
+        "apps.api.tasks.email_tasks.send_status_change_email": {"queue": "email_low"},
         "apps.api.tasks.email_tasks.send_project_added_email": {"queue": "email_low"},
     },
     # Rate limiting for email queues (SES limits)

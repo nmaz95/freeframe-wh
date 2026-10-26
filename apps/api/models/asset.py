@@ -36,7 +36,13 @@ class Asset(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     asset_type: Mapped[AssetType] = mapped_column(Enum(AssetType), nullable=False)
+    # Deprecated: the fixed enum a status used to be. Kept for smart collection
+    # filters and older clients, and mirrored from the custom status when that
+    # status names a `legacy_key`. New code reads `status_id`.
     status: Mapped[AssetStatus] = mapped_column(Enum(AssetStatus), default=AssetStatus.draft)
+    # The instance-defined status (models/pipeline.py). NULL means the
+    # instance default; the upload path always sets it.
+    status_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("asset_statuses.id"), nullable=True, index=True)
     rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     assignee_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
     folder_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("folders.id"), nullable=True, index=True)

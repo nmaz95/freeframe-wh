@@ -42,6 +42,8 @@ class AssetResponse(BaseModel):
     description: Optional[str]
     asset_type: AssetType
     status: AssetStatus
+    # The instance-defined status; None reads as the instance default.
+    status_id: Optional[uuid.UUID] = None
     rating: Optional[int]
     assignee_id: Optional[uuid.UUID]
     folder_id: Optional[uuid.UUID] = None
@@ -92,3 +94,6 @@ class NotificationResponse(BaseModel):
     actor_is_guest: bool = False
     comment_preview: Optional[str] = None
     project_id: Optional[uuid.UUID] = None
+    actor_id: Optional[uuid.UUID] = None
+    # What a status_change said: status_id, status_name, status_color, from_status_name.
+    payload: Optional[dict] = None

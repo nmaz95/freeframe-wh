@@ -22,6 +22,9 @@ import { useReviewStore } from '@/stores/review-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useComments } from '@/hooks/use-comments'
 import { useSSE } from '@/hooks/use-sse'
+import { useAssetStatuses } from '@/hooks/use-asset-statuses'
+import { StatusDropdown } from '@/components/projects/menus/status-menu'
+import { PipelineRolesPanel } from '@/components/projects/pipeline-roles-panel'
 import { api } from '@/lib/api'
 import { projectFolderHref } from '@/lib/project-links'
 import { useUploadStore, visibleFiles } from '@/stores/upload-store'
@@ -44,7 +47,7 @@ import Link from 'next/link'
 import { cn, formatTimecode } from '@/lib/utils'
 import { PoweredByBadge } from '@/components/shared/powered-by-badge'
 import { usePageTitle } from '@/hooks/use-page-title'
-import type { Project, AssetResponse, ProjectMember, FolderTreeNode } from '@/types'
+import type { Project, AssetResponse, AssetStatusDef, ProjectMember, FolderTreeNode, User } from '@/types'
 
 const acceptByType: Record<string, string> = {
   video: 'video/*',
@@ -57,7 +60,8 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const { asset, versions, isLoading, refetchComments, refetchVersions, togglePlayback } = useReview()
+  const { asset, versions, isLoading, refetchComments, refetchVersions, togglePlayback, patchAsset } = useReview()
+  const { statuses, statusFor, rankOf } = useAssetStatuses()
   const { currentVersion, isDrawingMode, focusedCommentId, playheadTime, seekTo, setFocusedCommentId, setActiveAnnotation } = useReviewStore()
   const { user } = useAuthStore()
   const startVersionUpload = useUploadStore((s) => s.startVersionUpload)
@@ -177,6 +181,29 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const currentMember = members?.find((m) => m.user_id === user?.id)
   const currentRole = currentMember?.role ?? 'viewer'
   const canComment = currentRole !== 'viewer'
+  const canSetStatus = currentRole !== 'viewer'
+  const canEditRoles = currentRole === 'owner' || currentRole === 'editor'
+  const memberIds = useMemo(() => (members ?? []).map((m) => m.user_id), [members])
+  const { data: memberUsers } = useSWR<User[]>(
+    memberIds.length > 0 ? `/users?ids=${memberIds.join(',')}` : null,
+    (key: string) => api.get<User[]>(key),
+  )
+  const usersById = useMemo(
+    () => Object.fromEntries((memberUsers ?? []).map((u) => [u.id, u])) as Record<string, User | undefined>,
+    [memberUsers],
+  )
+  const handleSetStatus = useCallback(
+    async (status: AssetStatusDef) => {
+      if (!asset) return
+      try {
+        const updated = await api.put<AssetResponse>(`/assets/${asset.id}/status`, { status_id: status.id })
+        patchAsset({ status_id: updated.status_id })
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Could not change the status')
+      }
+    },
+    [asset, patchAsset, toast],
+  )
   // delete_comment lets a project owner remove anyone's comment.
   const canModerate = currentRole === 'owner'
 
@@ -190,8 +217,8 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const sortKey = useViewStore((s) => s.sortKey)
   const sortDirection = useViewStore((s) => s.sortDirection)
   const navAssets = useMemo(
-    () => (folderAssets ? sortAssets(folderAssets, sortKey, sortDirection) : undefined),
-    [folderAssets, sortKey, sortDirection],
+    () => (folderAssets ? sortAssets(folderAssets, sortKey, sortDirection, rankOf) : undefined),
+    [folderAssets, sortKey, sortDirection, rankOf],
   )
 
   const {
@@ -213,6 +240,9 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     onTranscodeProgress: (d) => refetchIfThisAsset(d.asset_id),
     onTranscodeComplete: (d) => refetchIfThisAsset(d.asset_id),
     onTranscodeFailed: (d) => refetchIfThisAsset(d.asset_id),
+    onAssetStatusUpdated: (d) => {
+      if (d.asset_id === asset?.id) patchAsset({ status_id: d.status_id })
+    },
   })
 
   // Transcode events are not the only thing that changes this list. Discarding
@@ -521,6 +551,17 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           <span className="text-xs text-text-tertiary">Name</span>
           <span className="text-xs text-text-primary font-medium truncate ml-4">{asset.name}</span>
         </div>
+        {statuses.length > 0 && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-text-tertiary">Status</span>
+            <StatusDropdown
+              statuses={statuses}
+              current={statusFor(asset)}
+              onPick={handleSetStatus}
+              disabled={!canSetStatus}
+            />
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <span className="text-xs text-text-tertiary">Type</span>
           <span className="text-xs text-text-primary capitalize">{asset.asset_type.replace('_', ' ')}</span>
@@ -546,6 +587,24 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           </div>
         )}
       </div>
+      {members && (
+        <div className="space-y-2 border-t border-border pt-4">
+          <div>
+            <p className="text-xs font-medium text-text-tertiary uppercase tracking-wide">Pipeline roles</p>
+            <p className="text-2xs text-text-tertiary mt-0.5">
+              Who this asset&apos;s status changes notify. Empty means the project&apos;s default.
+            </p>
+          </div>
+          <PipelineRolesPanel
+            projectId={projectId}
+            assetId={asset.id}
+            members={members}
+            users={usersById}
+            canEdit={canEditRoles}
+            compact
+          />
+        </div>
+      )}
     </div>
   )
 
@@ -578,6 +637,13 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           >
             {asset.name}
           </span>
+          <StatusDropdown
+            statuses={statuses}
+            current={statusFor(asset)}
+            onPick={handleSetStatus}
+            disabled={!canSetStatus}
+            className="ml-1 hidden sm:inline-flex"
+          />
         </div>
 
         {/* Center: asset navigation, then the credit.

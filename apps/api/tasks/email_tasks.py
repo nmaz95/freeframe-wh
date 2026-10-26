@@ -263,6 +263,41 @@ def send_approval_email(
 
 
 @shared_task(bind=True, queue="email_low", max_retries=3, default_retry_delay=120)
+def send_status_change_email(
+    self,
+    to_email: str,
+    actor_name: str,
+    asset_name: str,
+    status_name: str,
+    status_color: str,
+    from_status_name: Optional[str],
+    asset_link: str,
+):
+    """An asset was moved to a status whose rule names the recipient."""
+    try:
+        subject = f"{asset_name} is now {status_name}"
+        html_body = render_template(
+            "email/status_change.html",
+            subject=subject,
+            actor_name=actor_name,
+            asset_name=asset_name,
+            status_name=status_name,
+            status_color=status_color,
+            from_status_name=from_status_name,
+            asset_link=asset_link,
+        )
+        moved = f"from {from_status_name} " if from_status_name else ""
+        text_body = f"{actor_name} moved {asset_name} {moved}to {status_name}.\n\nView: {asset_link}"
+
+        success = _send_email(to_email, subject, html_body, text_body)
+        if not success:
+            raise Exception("Email sending failed")
+        return {"status": "sent", "to": to_email}
+    except Exception as exc:
+        self.retry(exc=exc)
+
+
+@shared_task(bind=True, queue="email_low", max_retries=3, default_retry_delay=120)
 def send_project_added_email(
     self,
     to_email: str,

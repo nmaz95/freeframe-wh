@@ -1,0 +1,13 @@
+{% extends "email/base.html" %}
+
+{% block content %}
+<h2>{{ asset_name }} is now <span style="color: {{ status_color }};">{{ status_name }}</span></h2>
+<p>
+    <strong>{{ actor_name }}</strong> moved <strong>{{ asset_name }}</strong>
+    {% if from_status_name %}from <strong>{{ from_status_name }}</strong> {% endif %}to
+    <strong style="color: {{ status_color }};">{{ status_name }}</strong>.
+</p>
+<p>
+    <a href="{{ asset_link }}" class="button">View Asset</a>
+</p>
+{% endblock %}

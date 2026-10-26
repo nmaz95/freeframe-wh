@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import type { User, UserStatus } from "@/types";
 import { InstanceSettingsTab } from "@/components/settings/instance-settings-tab";
 import { BrandingTab } from "@/components/settings/branding-tab";
+import { StatusesTab } from "@/components/settings/statuses-tab";
 
 // The API requires a name and the dialog doesn't ask for one, so each invitee
 // is listed under the local part of their address until they accept the invite
@@ -211,7 +212,7 @@ function userStatusBadge(status: UserStatus) {
 export default function AdminPage() {
   const { user, isSuperAdmin } = useAuthStore();
   const router = useRouter();
-  const [tab, setTab] = React.useState<"users" | "instance" | "branding">("users");
+  const [tab, setTab] = React.useState<"users" | "instance" | "branding" | "statuses">("users");
 
   const { data: usersResp, isLoading: loadingUsers } = useSWR<User[]>(
     isSuperAdmin ? "/admin/users" : null,
@@ -228,7 +229,7 @@ export default function AdminPage() {
   // Read after mount so the server and client render the same initial markup.
   React.useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("tab");
-    if (requested === "instance" || requested === "branding") {
+    if (requested === "instance" || requested === "branding" || requested === "statuses") {
       setTab(requested);
     }
   }, []);
@@ -346,14 +347,16 @@ export default function AdminPage() {
               ? "Configure this instance"
               : tab === "branding"
                 ? "Make this instance look like yours"
-                : "Manage platform users"}
+                : tab === "statuses"
+                  ? "Your review pipeline and who it notifies"
+                  : "Manage platform users"}
           </p>
         </div>
       </div>
 
       {/* Sub-tabs */}
       <div className="flex gap-1 border-b border-border">
-        {([["users", "Users"], ["instance", "Instance settings"], ["branding", "Branding"]] as const).map(([key, label]) => (
+        {([["users", "Users"], ["instance", "Instance settings"], ["branding", "Branding"], ["statuses", "Statuses"]] as const).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -371,6 +374,7 @@ export default function AdminPage() {
 
       {tab === "instance" && <InstanceSettingsTab />}
       {tab === "branding" && <BrandingTab />}
+      {tab === "statuses" && <StatusesTab />}
 
       {/* User management */}
       {tab === "users" && (

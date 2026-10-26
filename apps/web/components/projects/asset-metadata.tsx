@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input'
 import { Avatar } from '@/components/shared/avatar'
 import type {
   Asset,
-  AssetStatus,
   MetadataField,
   AssetMetadata,
   User,
@@ -180,7 +179,6 @@ export function AssetMetadataEditor({ asset, projectId, onUpdated }: AssetMetada
   const assetKey = `/assets/${asset.id}`
 
   // Built-in fields
-  const [status, setStatus] = React.useState<AssetStatus>(asset.status)
   const [rating, setRating] = React.useState<number | null>(asset.rating)
   const [dueDate, setDueDate] = React.useState<string>(asset.due_date ?? '')
   const [keywords, setKeywords] = React.useState<string[]>(asset.keywords ?? [])
@@ -230,7 +228,6 @@ export function AssetMetadataEditor({ asset, projectId, onUpdated }: AssetMetada
     setMsg('')
     try {
       await api.patch(`/assets/${asset.id}/metadata`, {
-        status,
         rating,
         due_date: dueDate || null,
         keywords,

@@ -7,6 +7,7 @@ import {
   UserCheck,
   MessageSquare,
   CheckCircle,
+  CircleDot,
 } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notification-store'
 import { usePageTitle } from '@/hooks/use-page-title'
@@ -22,6 +23,7 @@ const notificationIcons: Record<NotificationType, React.ElementType> = {
   due_soon: UserCheck,
   comment: MessageSquare,
   approval: CheckCircle,
+  status_change: CircleDot,
 }
 
 const notificationLabels: Record<NotificationType, string> = {
@@ -30,6 +32,7 @@ const notificationLabels: Record<NotificationType, string> = {
   due_soon: 'asset due soon',
   comment: 'commented on an asset',
   approval: 'updated approval status',
+  status_change: 'changed an asset\'s status',
 }
 
 function NotificationItem({ notification }: { notification: Notification }) {
@@ -52,14 +55,22 @@ function NotificationItem({ notification }: { notification: Notification }) {
           notification.type === 'comment' && 'bg-bg-tertiary text-text-secondary',
           (notification.type === 'assignment' || notification.type === 'due_soon') &&
             'bg-status-warning/15 text-status-warning',
+          notification.type === 'status_change' && 'bg-bg-tertiary',
         )}
+        style={
+          notification.type === 'status_change' && notification.payload?.status_color
+            ? { color: notification.payload.status_color }
+            : undefined
+        }
       >
         <Icon className="h-4 w-4" />
       </div>
 
       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
         <p className="text-sm text-text-primary">
-          {notificationLabels[notification.type]}
+          {notification.type === 'status_change' && notification.payload
+            ? `${notification.actor_name ?? 'Someone'} moved ${notification.asset_name ?? 'an asset'} to ${notification.payload.status_name}`
+            : notificationLabels[notification.type]}
         </p>
         <p className="text-xs text-text-tertiary">
           {formatRelativeTime(notification.created_at)}

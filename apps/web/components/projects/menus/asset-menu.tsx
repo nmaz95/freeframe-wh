@@ -6,7 +6,8 @@ import { copyToClipboard } from '@/lib/utils'
 import { withBasePath } from '@/lib/base-path'
 import { DownloadSubmenu } from '@/components/shared/download-menu'
 import { MenuAction, MenuSeparator } from '@/components/shared/item-menu'
-import type { Asset, DownloadOption } from '@/types'
+import { StatusSubmenu } from './status-menu'
+import type { Asset, AssetStatusDef, DownloadOption } from '@/types'
 
 export interface AssetMenuHandlers {
   onShare?: () => void
@@ -16,6 +17,10 @@ export interface AssetMenuHandlers {
   loadDownloadOptions?: () => Promise<DownloadOption[] | null>
   onRename?: () => void
   onDelete?: () => void
+  /** With these, a "Set status" submenu lists the instance's statuses. */
+  statuses?: AssetStatusDef[]
+  currentStatusId?: string | null
+  onSetStatus?: (status: AssetStatusDef) => void
 }
 
 /**
@@ -30,9 +35,18 @@ export function AssetMenuItems({
   loadDownloadOptions,
   onRename,
   onDelete,
+  statuses,
+  currentStatusId,
+  onSetStatus,
 }: AssetMenuHandlers & { asset: Pick<Asset, 'id' | 'project_id'> }) {
   return (
     <>
+      {onSetStatus && statuses && statuses.length > 0 && (
+        <>
+          <StatusSubmenu statuses={statuses} currentId={currentStatusId ?? null} onPick={onSetStatus} />
+          <MenuSeparator />
+        </>
+      )}
       {onShare && (
         <>
           <MenuAction icon={Share2} onSelect={onShare}>

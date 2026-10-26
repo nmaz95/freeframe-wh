@@ -37,6 +37,7 @@ from ..schemas.upload import (
 )
 from ..services.storage import choose_part_size, upload_guard_error
 from ..services.versions import next_version_number
+from ..services.status_notifications import get_default_status
 
 logger = logging.getLogger(__name__)
 
@@ -91,12 +92,14 @@ def initiate_upload(
                 raise HTTPException(status_code=404, detail="Folder not found")
 
         asset_type = mime_to_asset_type(body.mime_type)
+        default_status = get_default_status(db)
         asset = Asset(
             project_id=body.project_id,
             name=body.asset_name,
             asset_type=asset_type,
             created_by=current_user.id,
             folder_id=body.folder_id,
+            status_id=default_status.id if default_status else None,
         )
         db.add(asset)
         db.flush()

@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Avatar } from '@/components/shared/avatar'
 import { SkeletonList } from '@/components/shared/skeleton'
 import { useAuthStore } from '@/stores/auth-store'
+import { PipelineRolesPanel } from '@/components/projects/pipeline-roles-panel'
 import type { ProjectMember, ProjectRole, User } from '@/types'
 
 const ROLES: { value: ProjectRole; label: string; description: string }[] = [
@@ -303,6 +304,22 @@ export function ProjectPeopleTab({ projectId }: { projectId: string }) {
       <AddMember projectId={projectId} memberIds={memberIds} onAdded={() => void mutateMembers()} />
 
       {rowError && <p role="alert" className="text-sm text-status-error">{rowError}</p>}
+
+      <section className="rounded-xl border border-border bg-bg-secondary p-4 space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-text-primary">Pipeline roles</h2>
+          <p className="text-xs text-text-tertiary mt-0.5">
+            Who is told when an asset moves to a status that notifies a role. These are the
+            project&apos;s defaults; a single asset can override them from its review page.
+          </p>
+        </div>
+        <PipelineRolesPanel
+          projectId={projectId}
+          members={members}
+          users={Object.fromEntries(byId)}
+          canEdit
+        />
+      </section>
 
       <section className="overflow-hidden rounded-xl border border-border bg-bg-secondary">
         <h2 className="border-b border-border px-4 py-3 text-sm font-semibold text-text-primary">

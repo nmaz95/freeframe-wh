@@ -18,6 +18,7 @@ class ActivityAction(str, PyEnum):
     assigned = "assigned"
     approved = "approved"
     rejected = "rejected"
+    status_changed = "status_changed"
 
 class NotificationType(str, PyEnum):
     mention = "mention"
@@ -25,6 +26,7 @@ class NotificationType(str, PyEnum):
     due_soon = "due_soon"
     comment = "comment"
     approval = "approval"
+    status_change = "status_change"
 
 class Mention(Base):
     __tablename__ = "mentions"
@@ -51,5 +53,11 @@ class Notification(Base):
     type: Mapped[NotificationType] = mapped_column(Enum(NotificationType), nullable=False)
     asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id"), nullable=False, index=True)
     comment_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("comments.id"), nullable=True)
+    # Who caused it, for notifications that have no comment to name an actor
+    # through (a status change). Older rows have none.
+    actor_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
+    # A snapshot of what the notification said (a status name and colour),
+    # so a later rename or delete does not rewrite history.
+    payload: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     read: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

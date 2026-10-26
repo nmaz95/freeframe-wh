@@ -99,7 +99,7 @@ def test_the_asset_list_carries_each_assets_comment_count():
     def asset(name):
         a = MagicMock()
         a.id = uuid.uuid4(); a.project_id = project_id; a.name = name
-        a.description = None; a.asset_type = AssetType.video; a.status = AssetStatus.in_review
+        a.description = None; a.asset_type = AssetType.video; a.status = AssetStatus.in_review; a.status_id = None
         a.rating = None; a.assignee_id = None; a.folder_id = None; a.due_date = None
         a.keywords = []; a.created_by = uuid.uuid4(); a.created_at = now; a.updated_at = now
         # Read by AssetResponse.model_validate before the builder sets them.

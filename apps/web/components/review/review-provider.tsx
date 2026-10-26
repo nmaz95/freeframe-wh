@@ -38,6 +38,8 @@ interface ReviewContextValue {
   seekTo: (time: number) => void;
   refetchComments: () => Promise<void>;
   refetchVersions: () => Promise<void>;
+  /** Apply fields the server already confirmed (a status change) without a refetch. */
+  patchAsset: (patch: Partial<AssetResponse>) => void;
   pauseVideo: () => void;
   registerPauseHandler: (handler: () => void) => void;
   /** The video player's own play/pause toggle, retry and all. No-op without a video player. */
@@ -249,6 +251,10 @@ export function ReviewProvider({
     }
   }, [assetId, shareToken]);
 
+  const patchAsset = useCallback((patch: Partial<AssetResponse>) => {
+    setAsset((prev) => (prev ? { ...prev, ...patch } : prev));
+  }, []);
+
   const refetchComments = useCallback(async () => {
     await fetchComments();
   }, [fetchComments]);
@@ -429,6 +435,7 @@ export function ReviewProvider({
       seekTo,
       refetchComments,
       refetchVersions,
+      patchAsset,
       pauseVideo,
       registerPauseHandler,
       togglePlayback,
@@ -446,6 +453,7 @@ export function ReviewProvider({
       seekTo,
       refetchComments,
       refetchVersions,
+      patchAsset,
       pauseVideo,
       registerPauseHandler,
       togglePlayback,

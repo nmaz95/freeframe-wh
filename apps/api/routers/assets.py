@@ -28,6 +28,8 @@ from ..schemas.upload import (
 )
 from ..services.storage import choose_part_size, upload_guard_error
 from ..services.versions import next_version_number
+from ..services.status_notifications import change_asset_status
+from ..models.pipeline import AssetStatusDef
 from ..services.s3_service import create_multipart_upload
 from .upload import storage_initiate_error
 
@@ -296,8 +298,23 @@ def update_asset(
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
-    for field, value in body.model_dump(exclude_unset=True).items():
+    fields = body.model_dump(exclude_unset=True)
+    # The legacy enum is a status too. Sent here, it is the custom status that
+    # mirrors it, moved through the same path as PUT /assets/{id}/status so the
+    # rule's notifications are not bypassed. A value no status mirrors just
+    # lands on the column, as it always did.
+    legacy = fields.pop("status", None)
+    for field, value in fields.items():
         setattr(asset, field, value)
+    if legacy is not None:
+        target = db.query(AssetStatusDef).filter(
+            AssetStatusDef.legacy_key == legacy.value,
+            AssetStatusDef.deleted_at.is_(None),
+        ).first()
+        if target is not None:
+            change_asset_status(db, asset, target, current_user)
+        else:
+            asset.status = legacy
     db.commit()
     db.refresh(asset)
     return _build_asset_response(asset, db)

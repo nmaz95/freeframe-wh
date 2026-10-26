@@ -40,6 +40,12 @@ export interface ApprovalUpdatedEvent {
   status: string
 }
 
+export interface AssetStatusUpdatedEvent {
+  asset_id: string
+  status_id: string
+  user_id: string
+}
+
 export type SSEEventType =
   | 'transcode_progress'
   | 'transcode_complete'
@@ -47,6 +53,7 @@ export type SSEEventType =
   | 'new_comment'
   | 'comment_resolved'
   | 'approval_updated'
+  | 'asset_status_updated'
 
 export interface SSEEvent {
   type: SSEEventType
@@ -57,6 +64,7 @@ export interface SSEEvent {
     | NewCommentEvent
     | CommentResolvedEvent
     | ApprovalUpdatedEvent
+    | AssetStatusUpdatedEvent
 }
 
 // ─── Hook options ─────────────────────────────────────────────────────────────
@@ -68,6 +76,7 @@ export interface UseSSEOptions {
   onNewComment?: (data: NewCommentEvent) => void
   onCommentResolved?: (data: CommentResolvedEvent) => void
   onApprovalUpdated?: (data: ApprovalUpdatedEvent) => void
+  onAssetStatusUpdated?: (data: AssetStatusUpdatedEvent) => void
   enabled?: boolean
 }
 
@@ -110,6 +119,7 @@ export function useSSE(projectId: string | null | undefined, options: UseSSEOpti
     onNewComment,
     onCommentResolved,
     onApprovalUpdated,
+    onAssetStatusUpdated,
     enabled = true,
   } = options
 
@@ -124,6 +134,7 @@ export function useSSE(projectId: string | null | undefined, options: UseSSEOpti
     onNewComment,
     onCommentResolved,
     onApprovalUpdated,
+    onAssetStatusUpdated,
   })
 
   React.useEffect(() => {
@@ -134,11 +145,13 @@ export function useSSE(projectId: string | null | undefined, options: UseSSEOpti
       onNewComment,
       onCommentResolved,
       onApprovalUpdated,
+      onAssetStatusUpdated,
     }
   })
 
   React.useEffect(() => {
     if (!enabled || !projectId) return
+    if (typeof EventSource === 'undefined') return
 
     let es: EventSource | null = null
     let retryIndex = 0
@@ -289,6 +302,19 @@ export function useSSE(projectId: string | null | undefined, options: UseSSEOpti
           const event: SSEEvent = { type: 'approval_updated', data }
           setLastEvent(event)
           callbackRefs.current.onApprovalUpdated?.(data)
+        } catch {
+          // ignore malformed events
+        }
+      })
+
+      // ── asset_status_updated ──
+      es.addEventListener('asset_status_updated', (e: MessageEvent) => {
+        if (destroyed) return
+        try {
+          const data = JSON.parse(e.data) as AssetStatusUpdatedEvent
+          const event: SSEEvent = { type: 'asset_status_updated', data }
+          setLastEvent(event)
+          callbackRefs.current.onAssetStatusUpdated?.(data)
         } catch {
           // ignore malformed events
         }

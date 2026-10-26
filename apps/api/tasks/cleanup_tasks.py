@@ -21,6 +21,7 @@ from ..models.branding import ProjectBranding, WatermarkSettings
 from ..models.instance_branding import InstanceBranding
 from ..models.user import User
 from ..models.activity import Mention, ActivityLog, Notification
+from ..models.pipeline import PipelineRoleAssignment
 from ..services.owned_keys import is_project_logo_key
 from ..services.s3_service import (
     list_stale_multipart_uploads, abort_multipart_upload, delete_object, delete_prefix, list_keys,
@@ -167,6 +168,7 @@ def _purge_asset(db, asset_id, counts: PurgeCounts) -> None:
     db.query(AssetShare).filter(AssetShare.asset_id == asset_id).delete(synchronize_session=False)
     db.query(ActivityLog).filter(ActivityLog.asset_id == asset_id).delete(synchronize_session=False)
     db.query(Notification).filter(Notification.asset_id == asset_id).delete(synchronize_session=False)
+    db.query(PipelineRoleAssignment).filter(PipelineRoleAssignment.asset_id == asset_id).delete(synchronize_session=False)
     db.query(Asset).filter(Asset.id == asset_id).delete(synchronize_session=False)
     counts.assets += 1
     db.flush()
@@ -232,6 +234,7 @@ def _purge_project(db, project_id, counts: PurgeCounts) -> None:
         db.query(ProjectBranding).filter(ProjectBranding.project_id == project_id).delete(synchronize_session=False)
     db.query(WatermarkSettings).filter(WatermarkSettings.project_id == project_id).delete(synchronize_session=False)
     db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete(synchronize_session=False)
+    db.query(PipelineRoleAssignment).filter(PipelineRoleAssignment.project_id == project_id).delete(synchronize_session=False)
     db.query(ActivityLog).filter(ActivityLog.project_id == project_id).delete(synchronize_session=False)
     if p.poster_s3_key:
         _safe(delete_object, p.poster_s3_key)

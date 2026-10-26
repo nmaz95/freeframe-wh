@@ -16,8 +16,9 @@ import { AppearancePopover } from './appearance-popover'
 import { SortPopover } from './sort-popover'
 import { MoveToDialog } from './move-to-dialog'
 import { useViewStore } from '@/stores/view-store'
-import { sortAssets } from '@/lib/sort-assets'
-import type { Asset, DownloadOption, User, Folder, FolderTreeNode } from '@/types'
+import { sortAssets, type StatusRank } from '@/lib/sort-assets'
+import { StatusBadge } from '@/components/shared/status-badge'
+import type { Asset, AssetStatusDef, DownloadOption, User, Folder, FolderTreeNode } from '@/types'
 import type { Collected } from '@/lib/upload-folder-walk'
 
 function isCoarsePointer(): boolean {
@@ -84,6 +85,16 @@ interface AssetGridProps {
   loadAssetDownloadOptions?: (asset: Asset) => Promise<DownloadOption[] | null>
   onAssetRename?: (asset: Asset) => void
   onAssetDelete?: (asset: Asset) => void
+  /** The instance's statuses, for the dot on each card and the Set status menu. */
+  statuses?: AssetStatusDef[]
+  /** An asset's status (null or absent id reads as the default). */
+  statusFor?: (asset: Asset) => AssetStatusDef | null
+  /** Pipeline order, for the Status sort. */
+  rankOf?: StatusRank
+  /** Only assets in this status are shown. */
+  statusFilter?: string | null
+  /** Offered in the menu only when present (reviewer and up). */
+  onAssetSetStatus?: (asset: Asset, status: AssetStatusDef) => void
   /** Actions rendered on the right side of the navigator bar */
   actions?: React.ReactNode
   /** ⌘/Ctrl-A selects everything shown, shift-click selects a range,
@@ -145,6 +156,11 @@ export function AssetGrid({
   loadAssetDownloadOptions,
   onAssetRename,
   onAssetDelete,
+  statuses,
+  statusFor,
+  rankOf,
+  statusFilter,
+  onAssetSetStatus,
   actions,
   selectionShortcuts = false,
   onDeselectAll,
@@ -249,10 +265,13 @@ export function AssetGrid({
   }
   const selectedTotalSize = Array.from(selectedAssetIds).reduce((sum, id) => sum + (fileSizes[id] ?? 0), 0)
 
-  const filtered = React.useMemo(
-    () => sortAssets(assets, sortKey, sortDirection),
-    [assets, sortKey, sortDirection],
-  )
+  const filtered = React.useMemo(() => {
+    const shown =
+      statusFilter && statusFor
+        ? assets.filter((a) => statusFor(a)?.id === statusFilter)
+        : assets
+    return sortAssets(shown, sortKey, sortDirection, rankOf)
+  }, [assets, sortKey, sortDirection, rankOf, statusFilter, statusFor])
 
   const showFolders = !flattenFolders && folders && folders.length > 0
 
@@ -528,6 +547,9 @@ export function AssetGrid({
                 loadDownloadOptions={loadAssetDownloadOptions ? () => loadAssetDownloadOptions(asset) : undefined}
                 onRename={onAssetRename ? () => onAssetRename(asset) : undefined}
                 onDelete={onAssetDelete ? () => onAssetDelete(asset) : undefined}
+                status={statusFor ? statusFor(asset) : null}
+                statuses={statuses}
+                onSetStatus={onAssetSetStatus ? (s) => onAssetSetStatus(asset, s) : undefined}
                 contextMenu={selectionMenuFor('asset', asset.id)}
                 onDragStart={(e: React.DragEvent) => {
                   const ids = selectedAssetIds.has(asset.id)
@@ -659,6 +681,7 @@ export function AssetGrid({
             const versionCount = versionCounts[asset.id]
             const author = authorNames[asset.created_by]
             const TypeIcon = assetTypeIcons[asset.asset_type] ?? ImageIcon
+            const status = statusFor ? statusFor(asset) : null
             const assetMenu = (
               <AssetMenuItems
                 asset={asset}
@@ -667,6 +690,9 @@ export function AssetGrid({
                 loadDownloadOptions={loadAssetDownloadOptions ? () => loadAssetDownloadOptions(asset) : undefined}
                 onRename={onAssetRename ? () => onAssetRename(asset) : undefined}
                 onDelete={onAssetDelete ? () => onAssetDelete(asset) : undefined}
+                statuses={statuses}
+                currentStatusId={status?.id ?? null}
+                onSetStatus={onAssetSetStatus ? (s) => onAssetSetStatus(asset, s) : undefined}
               />
             )
             return (
@@ -707,8 +733,9 @@ export function AssetGrid({
                   </button>
                 </div>
                 {/* Name + status */}
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 flex items-center gap-2">
                   <p className="text-sm font-medium text-text-primary truncate leading-snug">{asset.name}</p>
+                  {status && <StatusBadge status={status} className="hidden sm:inline-flex shrink-0" />}
                 </div>
                 {/* Uploader */}
                 {showUploader && (

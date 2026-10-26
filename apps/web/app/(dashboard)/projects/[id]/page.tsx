@@ -43,6 +43,9 @@ import { useBreadcrumbStore } from "@/stores/breadcrumb-store";
 import { useComments } from "@/hooks/use-comments";
 import { useFolders, useTrash } from "@/hooks/use-folders";
 import { useShareLinks } from "@/hooks/use-share-links";
+import { useAssetStatuses } from "@/hooks/use-asset-statuses";
+import { useSSE } from "@/hooks/use-sse";
+import { StatusDot } from "@/components/shared/status-badge";
 import { FolderTree } from "@/components/projects/folder-tree";
 import { ShareLinksTable } from "@/components/projects/share-links-table";
 import { ShareLinkMenuItems } from "@/components/projects/menus/share-link-menu";
@@ -58,7 +61,9 @@ import { usePageTitle } from "@/hooks/use-page-title";
 import { useRefetchOnUploadStatus } from "@/hooks/use-upload-refetch";
 import type {
   Project,
+  Asset,
   AssetResponse,
+  AssetStatusDef,
   ProjectMember,
   User,
   Folder,
@@ -86,6 +91,20 @@ export default function ProjectDetailPage() {
   );
   const [showTrash, setShowTrash] = React.useState(false);
   const [showShareLinks, setShowShareLinks] = React.useState(false);
+  // The sidebar's Statuses filter: one status id, or everything. Kept in the
+  // URL so a filtered view can be linked and survives a reload.
+  const [statusFilter, setStatusFilterState] = React.useState<string | null>(
+    searchParams.get("status") || null,
+  );
+  const setStatusFilter = React.useCallback((id: string | null) => {
+    setStatusFilterState(id);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set("status", id);
+    else url.searchParams.delete("status");
+    window.history.replaceState(window.history.state, "", url.toString());
+  }, []);
+  const { statuses, statusFor, rankOf } = useAssetStatuses();
   const [selectedShareLink, setSelectedShareLink] = React.useState<
     string | null
   >(null);
@@ -216,6 +235,36 @@ export default function ProjectDetailPage() {
     (key: string) => api.get<AssetResponse[]>(key),
   );
 
+  // Someone else moving an asset shows on its card without a reload.
+  useSSE(showTrash ? null : projectId, {
+    onAssetStatusUpdated: () => { void mutateAssets(); },
+  });
+
+  const handleSetStatus = React.useCallback(
+    async (asset: Asset, status: AssetStatusDef) => {
+      try {
+        const updated = await api.put<AssetResponse>(`/assets/${asset.id}/status`, { status_id: status.id });
+        await mutateAssets(
+          (current) => current?.map((a) => (a.id === asset.id ? { ...a, status_id: updated.status_id } : a)),
+          { revalidate: false },
+        );
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Could not change the status");
+      }
+    },
+    [mutateAssets, toast],
+  );
+
+  // How many assets in view sit in each status, for the sidebar.
+  const statusCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const a of assets ?? []) {
+      const s = statusFor(a);
+      if (s) counts[s.id] = (counts[s.id] ?? 0) + 1;
+    }
+    return counts;
+  }, [assets, statusFor]);
+
   // Subfolders for current view
   const { data: subfolders, mutate: mutateSubfolders } = useSWR<Folder[]>(
     showTrash
@@ -308,6 +357,8 @@ export default function ProjectDetailPage() {
   const canManageMembers = currentRole === "owner";
   const canSeeShareLinks = currentRole === "owner" || currentRole === "editor";
   const canComment = currentRole !== "viewer";
+  // Moving an asset between statuses takes the reviewer role, as approving does.
+  const canSetStatus = currentRole !== "viewer";
   // Until the members and the signed-in user have both answered, the role
   // above reads "viewer" without anyone being one. A file dropped then is held
   // rather than refused, and decided once they answer. A 403 from the members
@@ -689,6 +740,55 @@ export default function ProjectDetailPage() {
           )}
         </div>}
 
+        {/* Statuses: a filter on the assets in view, as Krock-style boards have */}
+        {statuses.length > 0 && (
+          <div className="px-3 py-2 border-t border-border">
+            <div className="flex items-center justify-between px-2 mb-1">
+              <span className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider">
+                Statuses
+              </span>
+              {statusFilter && (
+                <button
+                  onClick={() => setStatusFilter(null)}
+                  className="text-2xs text-text-tertiary hover:text-text-primary transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="space-y-0.5" role="radiogroup" aria-label="Filter by status">
+              {statuses.map((s) => {
+                const active = statusFilter === s.id;
+                const count = statusCounts[s.id] ?? 0;
+                return (
+                  <button
+                    key={s.id}
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => {
+                      setShowShareLinks(false);
+                      setShowTrash(false);
+                      setStatusFilter(active ? null : s.id);
+                    }}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
+                      active
+                        ? "bg-bg-hover text-text-primary"
+                        : "text-text-secondary hover:bg-bg-hover hover:text-text-primary",
+                    )}
+                  >
+                    <StatusDot color={s.color} size="md" />
+                    <span className="truncate flex-1 text-left">{s.name}</span>
+                    {count > 0 && (
+                      <span className="text-2xs text-text-tertiary tabular-nums">{count}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Spacer */}
         <div className="flex-1" />
 
@@ -822,6 +922,11 @@ export default function ProjectDetailPage() {
               authorNames={authorNames}
               fileSizes={fileSizes}
               selectedAssetId={selectedAsset?.id}
+              statuses={statuses}
+              statusFor={statusFor}
+              rankOf={rankOf}
+              statusFilter={statusFilter}
+              onAssetSetStatus={canSetStatus ? handleSetStatus : undefined}
               selectionShortcuts
               onDeselectAll={() => setSelectedAsset(null)}
               // The toolbar's Upload menu, which this opens, is there only

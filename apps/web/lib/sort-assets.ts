@@ -13,9 +13,14 @@ const statusOrder: Record<AssetStatus, number> = {
 interface SortableAsset {
   name: string
   status: AssetStatus
+  status_id?: string | null
   asset_type: string
   updated_at: string
 }
+
+/** Where an asset's status sits in the instance's pipeline order; see
+ *  `useAssetStatuses().rankOf`. Without one, the legacy enum order is used. */
+export type StatusRank = (asset: SortableAsset) => number
 
 /**
  * The order the project view shows assets in. The review page's prev/next
@@ -26,6 +31,7 @@ export function sortAssets<T extends SortableAsset>(
   assets: readonly T[],
   sortKey: SortKey,
   sortDirection: SortDirection,
+  rankOf?: StatusRank,
 ): T[] {
   const result = [...assets]
   if (sortKey === 'custom') return result
@@ -37,7 +43,7 @@ export function sortAssets<T extends SortableAsset>(
     } else if (sortKey === 'name') {
       cmp = compareNames(a.name, b.name)
     } else if (sortKey === 'status') {
-      cmp = statusOrder[a.status] - statusOrder[b.status]
+      cmp = rankOf ? rankOf(a) - rankOf(b) : statusOrder[a.status] - statusOrder[b.status]
     } else if (sortKey === 'type') {
       cmp = a.asset_type.localeCompare(b.asset_type)
     }
