@@ -44,6 +44,7 @@ import { useComments } from "@/hooks/use-comments";
 import { useFolders, useTrash } from "@/hooks/use-folders";
 import { useShareLinks } from "@/hooks/use-share-links";
 import { useAssetStatuses } from "@/hooks/use-asset-statuses";
+import { useStatusChangeConfirm } from "@/hooks/use-status-change-confirm";
 import { useSSE } from "@/hooks/use-sse";
 import { StatusDot } from "@/components/shared/status-badge";
 import { StatusDropdown } from "@/components/projects/menus/status-menu";
@@ -107,6 +108,7 @@ export default function ProjectDetailPage() {
     window.history.replaceState(window.history.state, "", url.toString());
   }, []);
   const { statuses, statusFor, rankOf } = useAssetStatuses();
+  const { confirmStatusChange, statusConfirmDialog } = useStatusChangeConfirm();
   const [selectedShareLink, setSelectedShareLink] = React.useState<
     string | null
   >(null);
@@ -244,6 +246,7 @@ export default function ProjectDetailPage() {
 
   const handleSetStatus = React.useCallback(
     async (asset: Asset, status: AssetStatusDef) => {
+      if (!(await confirmStatusChange(asset.name, statusFor(asset), status))) return;
       try {
         const updated = await api.put<AssetResponse>(`/assets/${asset.id}/status`, { status_id: status.id });
         await mutateAssets(
@@ -254,7 +257,7 @@ export default function ProjectDetailPage() {
         toast.error(err instanceof Error ? err.message : "Could not change the status");
       }
     },
-    [mutateAssets, toast],
+    [mutateAssets, toast, confirmStatusChange, statusFor],
   );
 
   // How many assets in view sit in each status, for the sidebar.
@@ -1469,6 +1472,7 @@ export default function ProjectDetailPage() {
       />
 
       {/* Bulk delete confirmation */}
+      {statusConfirmDialog}
       <ConfirmDialog
         open={pendingBulkDelete !== null}
         onOpenChange={(open) => {

@@ -17,8 +17,10 @@ An instance has one ordered list of statuses, managed by a superadmin under
 | Approved | | `approved` |
 | Rejected | | `rejected` |
 
-- **Default.** New uploads start in the default status. Exactly one status is
-  the default; make another the default before deleting it.
+- **Default.** New uploads start in the default status, and **a new version
+  of an existing asset puts it back there**, silently, so whoever takes the
+  version on says where it stands. Exactly one status is the default; make
+  another the default before deleting it.
 - **Delete.** Assets in a deleted status move to the default.
 - **Order.** The arrows set the pipeline order, which the sidebar, the menus
   and the *Status* sort use.
@@ -26,8 +28,11 @@ An instance has one ordered list of statuses, managed by a superadmin under
   and a pill in the review header.
 
 Reviewers and up change an asset's status from the card's ⋯ menu, the
-right-click menu, the review header pill, or the review page's *Fields* tab.
-Viewers see it but cannot change it. Share-link guests never see statuses.
+right-click menu, the review header pill, or the *Fields* tab of the review
+page or the project page's side panel. A confirmation names the move and who
+it notifies; "Don't ask again" skips it for the rest of the browser session.
+Viewers see the status but cannot change it. Share-link guests never see
+statuses.
 
 The legacy fixed enum column `assets.status` is kept for smart collections and
 older clients, and is mirrored whenever an asset enters a status that names a

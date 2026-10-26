@@ -187,3 +187,61 @@ def test_patch_asset_legacy_status_goes_through_the_same_service(client, auth_he
     assert resp.status_code == 200, resp.text
     assert calls == [(asset, approved)]
     assert asset.rating == 4
+
+
+# ─── A new version puts the asset back at the default, silently ──────────────
+
+def _reset_wire(monkeypatch):
+    events = []
+    monkeypatch.setattr(svc, "send_task_safe", lambda task, **kw: events.append(("email", kw)))
+    monkeypatch.setattr(svc.event_service, "publish_sync", lambda pid, et, payload: events.append(("sse", et, payload)))
+    return events
+
+
+def test_new_version_reset_moves_to_the_default_without_notifying(mock_db, test_user, monkeypatch):
+    events = _reset_wire(monkeypatch)
+    mock_db.commit.side_effect = lambda: events.append(("commit",))
+    creator = _make_user(email="c@t.local", name="Creator")
+    default = _status(name="No Status", legacy_key="draft")
+    approved = _status(name="Approved", legacy_key="approved")
+    asset = _asset(creator, approved.id)
+    asset.status = AssetStatus.approved
+    # 1) the default status, 2) the one the asset is leaving
+    mock_db.first.side_effect = [default, approved]
+
+    assert svc.reset_asset_status_for_new_version(mock_db, asset, test_user) is True
+
+    assert asset.status_id == default.id
+    assert asset.status == AssetStatus.draft
+    added = [a for (a,), _ in mock_db.add.call_args_list]
+    [log] = [a for a in added if isinstance(a, ActivityLog)]
+    assert log.payload["reason"] == "new_version"
+    assert log.payload["from_status_name"] == "Approved"
+    assert log.payload["to_status_name"] == "No Status"
+    assert not any(isinstance(a, Notification) for a in added)
+    assert [e[0] for e in events] == ["commit", "sse"]
+    assert events[1][2]["status_id"] == str(default.id)
+
+
+def test_new_version_reset_is_a_no_op_at_the_default(mock_db, test_user, monkeypatch):
+    events = _reset_wire(monkeypatch)
+    creator = _make_user(email="c@t.local", name="Creator")
+    default = _status(name="No Status")
+    asset = _asset(creator, default.id)
+    mock_db.first.side_effect = [default]
+
+    assert svc.reset_asset_status_for_new_version(mock_db, asset, test_user) is False
+    mock_db.add.assert_not_called()
+    mock_db.commit.assert_not_called()
+    assert events == []
+
+
+def test_new_version_reset_without_a_default_does_nothing(mock_db, test_user, monkeypatch):
+    events = _reset_wire(monkeypatch)
+    creator = _make_user(email="c@t.local", name="Creator")
+    asset = _asset(creator, uuid.uuid4())
+    mock_db.first.side_effect = [None]
+
+    assert svc.reset_asset_status_for_new_version(mock_db, asset, test_user) is False
+    mock_db.commit.assert_not_called()
+    assert events == []

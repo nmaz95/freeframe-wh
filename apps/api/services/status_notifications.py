@@ -191,6 +191,47 @@ def load_role_holders(db: Session, asset: Asset, role_ids: Collection[uuid.UUID]
     return merge_role_holders(role_ids, defaults, overrides)
 
 
+def reset_asset_status_for_new_version(db: Session, asset: Asset, actor: User) -> bool:
+    """A new version puts `asset` back at the instance default status.
+
+    Silent by design: the activity log records it and the project stream
+    carries it, but nobody is notified. The move that matters comes next,
+    when the editor puts the version in its proper status, and that one tells
+    the people the status names. Returns False, having done nothing, when
+    there is no default or the asset is already there.
+    """
+    default = get_default_status(db)
+    if default is None or asset.status_id == default.id:
+        return False
+    previous = get_live_status(db, asset.status_id) if asset.status_id else None
+    asset.status_id = default.id
+    if default.legacy_key:
+        try:
+            asset.status = AssetStatus(default.legacy_key)
+        except ValueError:
+            pass
+    db.add(ActivityLog(
+        user_id=actor.id,
+        project_id=asset.project_id,
+        asset_id=asset.id,
+        action=ActivityAction.status_changed,
+        payload={
+            "from_status_id": str(previous.id) if previous else None,
+            "from_status_name": previous.name if previous else None,
+            "to_status_id": str(default.id),
+            "to_status_name": default.name,
+            "reason": "new_version",
+        },
+    ))
+    db.commit()
+    event_service.publish_sync(asset.project_id, STATUS_EVENT, {
+        "asset_id": str(asset.id),
+        "status_id": str(default.id),
+        "user_id": str(actor.id),
+    })
+    return True
+
+
 def asset_link(asset: Asset) -> str:
     return f"{settings.frontend_url}/projects/{asset.project_id}/assets/{asset.id}"
 

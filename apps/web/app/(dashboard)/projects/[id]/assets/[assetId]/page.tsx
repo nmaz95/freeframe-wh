@@ -23,6 +23,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useComments } from '@/hooks/use-comments'
 import { useSSE } from '@/hooks/use-sse'
 import { useAssetStatuses } from '@/hooks/use-asset-statuses'
+import { useStatusChangeConfirm } from '@/hooks/use-status-change-confirm'
 import { StatusDropdown } from '@/components/projects/menus/status-menu'
 import { PipelineRolesPanel } from '@/components/projects/pipeline-roles-panel'
 import { api } from '@/lib/api'
@@ -62,6 +63,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const searchParams = useSearchParams()
   const { asset, versions, isLoading, refetchComments, refetchVersions, togglePlayback, patchAsset } = useReview()
   const { statuses, statusFor, rankOf } = useAssetStatuses()
+  const { confirmStatusChange, statusConfirmDialog } = useStatusChangeConfirm()
   const { currentVersion, isDrawingMode, focusedCommentId, playheadTime, seekTo, setFocusedCommentId, setActiveAnnotation } = useReviewStore()
   const { user } = useAuthStore()
   const startVersionUpload = useUploadStore((s) => s.startVersionUpload)
@@ -195,6 +197,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const handleSetStatus = useCallback(
     async (status: AssetStatusDef) => {
       if (!asset) return
+      if (!(await confirmStatusChange(asset.name, statusFor(asset), status))) return
       try {
         const updated = await api.put<AssetResponse>(`/assets/${asset.id}/status`, { status_id: status.id })
         patchAsset({ status_id: updated.status_id })
@@ -202,7 +205,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
         toast.error(err instanceof Error ? err.message : 'Could not change the status')
       }
     },
-    [asset, patchAsset, toast],
+    [asset, patchAsset, toast, confirmStatusChange, statusFor],
   )
   // delete_comment lets a project owner remove anyone's comment.
   const canModerate = currentRole === 'owner'
@@ -612,6 +615,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   return (
     <div className="absolute inset-0 flex flex-col overflow-hidden">
+      {statusConfirmDialog}
       {/* ─── Top bar (Frame.io style) ──────────────────────────────────── */}
       <div className="flex items-center justify-between border-b border-border px-3 h-12 bg-bg-secondary shrink-0">
         {/* Left: back + breadcrumb. The name is the first thing the bar gives

@@ -37,6 +37,12 @@ const useMenuKind = () => React.useContext(MenuKindContext)
  */
 const AfterCloseContext = React.createContext<((action: () => void) => void) | null>(null)
 
+/** For a custom item (one not built with MenuAction) that opens a dialog:
+ *  the scheduler of the menu it sits in, or null outside any menu. */
+export function useAfterCloseScheduler() {
+  return React.useContext(AfterCloseContext)
+}
+
 /** Exported for the Log out confirmation in the sidebar, which opens a dialog
  *  from a menu item the same way. */
 export function useAfterClose() {

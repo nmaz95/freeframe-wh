@@ -37,7 +37,7 @@ from ..schemas.upload import (
 )
 from ..services.storage import choose_part_size, upload_guard_error
 from ..services.versions import next_version_number
-from ..services.status_notifications import get_default_status
+from ..services.status_notifications import get_default_status, reset_asset_status_for_new_version
 
 logger = logging.getLogger(__name__)
 
@@ -814,6 +814,12 @@ def complete_upload(
             # rather than by way of a check thirty lines up that a later edit
             # could move.
             background_tasks.add_task(_trigger_processing, asset_id, version_id)
+            # A new version of an existing asset starts the review over: the
+            # asset goes back to the default status, silently, for whoever
+            # takes it from there to say where it stands. Only once the upload
+            # is really complete -- an interrupted or discarded one leaves the
+            # status alone -- and only from the one request that claimed it.
+            background_tasks.add_task(_reset_status_for_new_version, asset_id, version_id, current_user.id)
         else:
             # Someone else moved it off `uploading` first. Dispatching again would
             # be the double transcode this guard exists to prevent. A version that
@@ -951,6 +957,29 @@ def _trigger_processing(asset_id: uuid.UUID, version_id: uuid.UUID):
     from ..tasks.transcode_tasks import process_asset
     from ..tasks.celery_app import send_task_safe
     send_task_safe(process_asset, str(asset_id), str(version_id))
+
+
+def _reset_status_for_new_version(asset_id: uuid.UUID, version_id: uuid.UUID, user_id: uuid.UUID) -> None:
+    """After the response: a completed second or later version puts the asset
+    back at the default status (services.status_notifications). Its own
+    session, like the event stream's, since the request's is closed by now;
+    best-effort, as a failure here must not undo a completed upload."""
+    from ..database import SessionLocal
+    db = SessionLocal()
+    try:
+        version = db.query(AssetVersion).filter(AssetVersion.id == version_id).first()
+        if version is None or (version.version_number or 0) <= 1:
+            return
+        asset = db.query(Asset).filter(Asset.id == asset_id, Asset.deleted_at.is_(None)).first()
+        actor = db.query(User).filter(User.id == user_id).first()
+        if asset is None or actor is None:
+            return
+        reset_asset_status_for_new_version(db, asset, actor)
+    except Exception:  # noqa: BLE001 - logged, never raised past a finished upload
+        logger.exception("could not reset the status of asset %s after version %s", asset_id, version_id)
+        db.rollback()
+    finally:
+        db.close()
 
 
 def _may_remove_asset(db: Session, asset_id: uuid.UUID, user: User) -> bool:

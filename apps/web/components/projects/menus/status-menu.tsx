@@ -6,6 +6,7 @@ import { Check, ChevronDown, ChevronRight, CircleDot } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   MenuItem, MenuSub, MenuSubContent, MenuSubTrigger, menuContentClass, menuItemClass,
+  useAfterClose, useAfterCloseScheduler,
 } from '@/components/shared/item-menu'
 import { StatusDot } from '@/components/shared/status-badge'
 import type { AssetStatusDef } from '@/types'
@@ -19,6 +20,8 @@ function StatusItems({
   currentId: string | null
   onPick: (status: AssetStatusDef) => void
 }) {
+  // A pick may open a confirmation, which must wait for the menu to close.
+  const afterClose = useAfterCloseScheduler()
   return (
     <>
       {statuses.map((s) => {
@@ -26,7 +29,11 @@ function StatusItems({
         return (
           <MenuItem
             key={s.id}
-            onSelect={() => { if (!active) onPick(s) }}
+            onSelect={() => {
+              if (active) return
+              if (afterClose) afterClose(() => onPick(s))
+              else onPick(s)
+            }}
             className={cn(menuItemClass, active && 'text-text-primary')}
             aria-checked={active}
             role="menuitemradio"
@@ -83,6 +90,7 @@ export function StatusDropdown({
   disabled?: boolean
   className?: string
 }) {
+  const { schedule, onCloseAutoFocus } = useAfterClose()
   if (!current) return null
   const pill = (
     <button
@@ -107,8 +115,13 @@ export function StatusDropdown({
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>{pill}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" sideOffset={6} className={menuContentClass}>
-          <StatusItems statuses={statuses} currentId={current.id} onPick={onPick} />
+        <DropdownMenu.Content
+          align="start"
+          sideOffset={6}
+          className={menuContentClass}
+          onCloseAutoFocus={onCloseAutoFocus}
+        >
+          <StatusItems statuses={statuses} currentId={current.id} onPick={(s) => schedule(() => onPick(s))} />
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
