@@ -55,14 +55,19 @@ at the time, so renaming a status later does not rewrite history.
 ## Pipeline roles
 
 A pipeline role is a named slot such as *PM*, *Editor*, *HOS* or *Client*
-(the four an install starts with). Roles are instance-wide; who holds one is
-set:
+(the four an install starts with; rename or add yours under Admin Dashboard →
+Statuses). Roles are instance-wide. **Who holds one is declared on each
+asset**: the *Fields* tab of the review page, and the *Fields* tab of the
+project page's side panel when a card is selected, show the asset's team per
+role and let an editor or owner change it.
 
-- **per project**, by the project owner, under *Project settings → People →
-  Pipeline roles* (the defaults), and
-- **per asset**, by an editor or owner, under the review page's *Fields* tab.
-  An asset with at least one holder for a role uses those people instead of
-  the project default for that role; an asset with none falls back.
+A project may also hold **defaults for new assets** (*Project settings →
+People → Pipeline roles*, owner only). An asset that names nobody for a role
+follows the project default for that role, and the panel says so ("project
+default"). Picking someone on such a role copies the default and applies the
+change to that asset only; "Use project default" hands the role back. This
+fits a project used as a container for a whole company: set the usual PM
+once, and name the editor and the social person video by video.
 
 Only project members can hold a role in a project. Removing someone from a
 project removes their roles in it; a deactivated user holds roles but is not

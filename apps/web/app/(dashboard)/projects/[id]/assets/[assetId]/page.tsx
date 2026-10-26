@@ -590,9 +590,10 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       {members && (
         <div className="space-y-2 border-t border-border pt-4">
           <div>
-            <p className="text-xs font-medium text-text-tertiary uppercase tracking-wide">Pipeline roles</p>
+            <p className="text-xs font-medium text-text-tertiary uppercase tracking-wide">Team on this asset</p>
             <p className="text-2xs text-text-tertiary mt-0.5">
-              Who this asset&apos;s status changes notify. Empty means the project&apos;s default.
+              Who this asset&apos;s status changes notify. Each role starts from the project&apos;s
+              default; pick someone to set it for this asset only.
             </p>
           </div>
           <PipelineRolesPanel

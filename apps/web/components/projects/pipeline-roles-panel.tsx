@@ -22,10 +22,15 @@ function toEntries(map: Map<string, string[]>): RoleAssignmentEntry[] {
 }
 
 /**
- * Who holds each pipeline role: the project's defaults (`scope: project`,
- * owner only) or one asset's overrides (`scope: asset`, editor and up). An
- * override row left empty falls back to the project default, which is shown
- * greyed under it. Each toggle saves at once.
+ * Who holds each pipeline role, and so who a status change notifies.
+ *
+ * With an `assetId` this is the asset's own team: each role shows the people
+ * it resolves to right now. Those come from the asset itself when it names
+ * anyone, and from the project's defaults otherwise, marked as such. Picking
+ * someone on a role that still follows the default copies the default and
+ * applies the change to this asset only; "Use project default" hands the role
+ * back. Without an `assetId` the panel edits the project's defaults, which
+ * new assets start from. Every click saves at once.
  */
 export function PipelineRolesPanel({
   projectId,
@@ -36,12 +41,12 @@ export function PipelineRolesPanel({
   compact,
 }: {
   projectId: string
-  /** With an asset, the panel edits that asset's overrides. */
+  /** With an asset, the panel edits that asset's own team. */
   assetId?: string
   members: ProjectMember[]
   users: Record<string, User | undefined>
   canEdit: boolean
-  /** Tighter rows, for the review sidebar. */
+  /** Tighter rows, for a side panel. */
   compact?: boolean
 }) {
   const { roles } = usePipelineRoles()
@@ -52,18 +57,22 @@ export function PipelineRolesPanel({
 
   if (roles.length === 0) return null
 
-  const scopeEntries = assetId ? data?.overrides : data?.project_defaults
-  const current = toMap(scopeEntries)
   const defaults = toMap(data?.project_defaults)
+  const overrides = toMap(assetId ? data?.overrides : undefined)
+  // The project scope edits the defaults themselves.
+  const own = assetId ? overrides : defaults
 
-  async function toggle(roleId: string, userId: string) {
-    if (!data) return
-    const next = new Map(current)
-    const holders = new Set(next.get(roleId) ?? [])
-    if (holders.has(userId)) holders.delete(userId)
-    else holders.add(userId)
-    next.set(roleId, Array.from(holders))
-    setSaving(`${roleId}:${userId}`)
+  const nameOf = (id: string) => users[id]?.name ?? users[id]?.email ?? 'Member'
+
+  /** What a role resolves to here, and where that comes from. */
+  function resolve(roleId: string): { holders: string[]; fromDefault: boolean } {
+    const mine = own.get(roleId) ?? []
+    if (!assetId || mine.length > 0) return { holders: mine, fromDefault: false }
+    return { holders: defaults.get(roleId) ?? [], fromDefault: true }
+  }
+
+  async function save(next: Map<string, string[]>, marker: string) {
+    setSaving(marker)
     setSaveError(null)
     try {
       const saved = await api.put<RoleAssignments>(key, { assignments: toEntries(next) })
@@ -75,6 +84,24 @@ export function PipelineRolesPanel({
     }
   }
 
+  function toggle(roleId: string, userId: string) {
+    if (!data) return
+    const { holders } = resolve(roleId)
+    const set = new Set(holders)
+    if (set.has(userId)) set.delete(userId)
+    else set.add(userId)
+    const next = new Map(own)
+    next.set(roleId, Array.from(set))
+    void save(next, `${roleId}:${userId}`)
+  }
+
+  function resetToDefault(roleId: string) {
+    if (!data) return
+    const next = new Map(own)
+    next.delete(roleId)
+    void save(next, `${roleId}:reset`)
+  }
+
   const memberRows = members
     .map((m) => ({ id: m.user_id, user: users[m.user_id] }))
     .sort((a, b) => (a.user?.name ?? '').localeCompare(b.user?.name ?? ''))
@@ -84,22 +111,32 @@ export function PipelineRolesPanel({
       {error && <p role="alert" className="text-xs text-status-error">Could not load roles: {errorText(error, 'request failed')}</p>}
       {saveError && <p role="alert" className="text-xs text-status-error">{saveError}</p>}
       {roles.map((role) => {
-        const holders = new Set(current.get(role.id) ?? [])
-        const fallback = assetId && holders.size === 0 ? defaults.get(role.id) ?? [] : []
+        const { holders, fromDefault } = resolve(role.id)
+        const holderSet = new Set(holders)
+        const overridden = !!assetId && (own.get(role.id)?.length ?? 0) > 0
         return (
-          <div key={role.id} className="space-y-1">
+          <div key={role.id} className="space-y-1" data-testid={`role-${role.name}`}>
             <div className="flex items-baseline justify-between gap-2">
               <span className={cn('font-medium text-text-primary', compact ? 'text-xs' : 'text-sm')}>{role.name}</span>
-              {fallback.length > 0 && (
-                <span className="text-2xs text-text-tertiary">
-                  project default: {fallback.map((id) => users[id]?.name ?? '—').join(', ')}
-                </span>
+              {assetId && fromDefault && holders.length > 0 && (
+                <span className="text-2xs text-text-tertiary">project default</span>
               )}
+              {overridden && canEdit && (
+                <button
+                  type="button"
+                  onClick={() => resetToDefault(role.id)}
+                  disabled={!data || saving !== null}
+                  className="text-2xs text-text-tertiary hover:text-text-primary underline-offset-2 hover:underline disabled:opacity-50"
+                >
+                  {saving === `${role.id}:reset` ? 'Saving…' : 'Use project default'}
+                </button>
+              )}
+              {overridden && !canEdit && <span className="text-2xs text-text-tertiary">set on this asset</span>}
             </div>
             {canEdit ? (
               <div className="flex flex-wrap gap-1">
                 {memberRows.map(({ id, user }) => {
-                  const on = holders.has(id)
+                  const on = holderSet.has(id)
                   const busy = saving === `${role.id}:${id}`
                   return (
                     <button
@@ -107,15 +144,16 @@ export function PipelineRolesPanel({
                       type="button"
                       role="checkbox"
                       aria-checked={on}
-                      aria-label={`${user?.name ?? id} holds ${role.name}`}
+                      aria-label={`${nameOf(id)} is ${role.name}${on && fromDefault ? ' (project default)' : ''}`}
                       disabled={!data || saving !== null}
                       onClick={() => toggle(role.id, id)}
                       className={cn(
                         'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs transition-colors disabled:opacity-60',
-                        on
-                          ? 'border-accent bg-accent-muted text-text-primary'
-                          : 'border-border text-text-secondary hover:border-border-focus hover:text-text-primary',
+                        on && !fromDefault && 'border-accent bg-accent-muted text-text-primary',
+                        on && fromDefault && 'border-dashed border-accent bg-accent-muted/60 text-text-primary',
+                        !on && 'border-border text-text-secondary hover:border-border-focus hover:text-text-primary',
                       )}
+                      title={on && fromDefault ? 'From the project default' : undefined}
                     >
                       {busy ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
@@ -124,7 +162,7 @@ export function PipelineRolesPanel({
                       ) : (
                         <Avatar name={user?.name ?? '?'} src={user?.avatar_url} color={user?.avatar_color} size="sm" />
                       )}
-                      <span className="max-w-[140px] truncate">{user?.name ?? user?.email ?? 'Member'}</span>
+                      <span className="max-w-[140px] truncate">{nameOf(id)}</span>
                     </button>
                   )
                 })}
@@ -132,11 +170,14 @@ export function PipelineRolesPanel({
               </div>
             ) : (
               <p className="text-text-secondary">
-                {holders.size > 0
-                  ? Array.from(holders).map((id) => users[id]?.name ?? '—').join(', ')
-                  : fallback.length > 0
-                    ? fallback.map((id) => users[id]?.name ?? '—').join(', ')
-                    : <span className="text-text-tertiary">Nobody</span>}
+                {holders.length > 0 ? (
+                  <>
+                    {holders.map(nameOf).join(', ')}
+                    {fromDefault && <span className="text-text-tertiary"> (project default)</span>}
+                  </>
+                ) : (
+                  <span className="text-text-tertiary">Nobody</span>
+                )}
               </p>
             )}
           </div>

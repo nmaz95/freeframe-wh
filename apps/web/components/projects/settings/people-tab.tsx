@@ -307,10 +307,11 @@ export function ProjectPeopleTab({ projectId }: { projectId: string }) {
 
       <section className="rounded-xl border border-border bg-bg-secondary p-4 space-y-3">
         <div>
-          <h2 className="text-sm font-semibold text-text-primary">Pipeline roles</h2>
+          <h2 className="text-sm font-semibold text-text-primary">Pipeline roles: defaults for new assets (optional)</h2>
           <p className="text-xs text-text-tertiary mt-0.5">
-            Who is told when an asset moves to a status that notifies a role. These are the
-            project&apos;s defaults; a single asset can override them from its review page.
+            Each asset names its own PM, editor and so on from its Fields panel, and those people
+            are told when it moves to a status that notifies their role. What you set here is where
+            every asset starts; an asset that names nobody for a role follows it.
           </p>
         </div>
         <PipelineRolesPanel

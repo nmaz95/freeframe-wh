@@ -46,6 +46,8 @@ import { useShareLinks } from "@/hooks/use-share-links";
 import { useAssetStatuses } from "@/hooks/use-asset-statuses";
 import { useSSE } from "@/hooks/use-sse";
 import { StatusDot } from "@/components/shared/status-badge";
+import { StatusDropdown } from "@/components/projects/menus/status-menu";
+import { PipelineRolesPanel } from "@/components/projects/pipeline-roles-panel";
 import { FolderTree } from "@/components/projects/folder-tree";
 import { ShareLinksTable } from "@/components/projects/share-links-table";
 import { ShareLinkMenuItems } from "@/components/projects/menus/share-link-menu";
@@ -359,6 +361,17 @@ export default function ProjectDetailPage() {
   const canComment = currentRole !== "viewer";
   // Moving an asset between statuses takes the reviewer role, as approving does.
   const canSetStatus = currentRole !== "viewer";
+  // Naming who holds a pipeline role on an asset takes the editor role.
+  const canEditRoles = currentRole === "owner" || currentRole === "editor";
+  const memberIds = React.useMemo(() => (members ?? []).map((m) => m.user_id), [members]);
+  const { data: memberUsers } = useSWR<User[]>(
+    memberIds.length > 0 ? `/users?ids=${memberIds.join(",")}` : null,
+    (key: string) => api.get<User[]>(key),
+  );
+  const memberUsersById = React.useMemo(
+    () => Object.fromEntries((memberUsers ?? []).map((u) => [u.id, u])) as Record<string, User | undefined>,
+    [memberUsers],
+  );
   // Until the members and the signed-in user have both answered, the role
   // above reads "viewer" without anyone being one. A file dropped then is held
   // rather than refused, and decided once they answer. A 403 from the members
@@ -1296,6 +1309,17 @@ export default function ProjectDetailPage() {
                           </span>
                         </div>
                       )}
+                      {statuses.length > 0 && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-text-tertiary">Status</span>
+                          <StatusDropdown
+                            statuses={statuses}
+                            current={statusFor(selectedAsset)}
+                            onPick={(s) => void handleSetStatus(selectedAsset, s)}
+                            disabled={!canSetStatus}
+                          />
+                        </div>
+                      )}
                       {selectedAsset.assignee_id &&
                         assigneesMap[selectedAsset.assignee_id] && (
                           <div className="flex items-center justify-between">
@@ -1317,6 +1341,29 @@ export default function ProjectDetailPage() {
                           </div>
                         )}
                     </div>
+
+                    {members && (
+                      <div className="pt-3 border-t border-border space-y-2">
+                        <div>
+                          <p className="text-xs font-medium text-text-tertiary uppercase tracking-wide">
+                            Team on this asset
+                          </p>
+                          <p className="text-2xs text-text-tertiary mt-0.5">
+                            Who this asset&apos;s status changes notify. Each role starts from the
+                            project&apos;s default; pick someone to set it for this asset only.
+                          </p>
+                        </div>
+                        <PipelineRolesPanel
+                          key={selectedAsset.id}
+                          projectId={projectId}
+                          assetId={selectedAsset.id}
+                          members={members}
+                          users={memberUsersById}
+                          canEdit={canEditRoles}
+                          compact
+                        />
+                      </div>
+                    )}
 
                     <div className="pt-3 border-t border-border grid grid-cols-2 gap-2">
                       <Button asChild className="w-full col-span-2" size="sm">
