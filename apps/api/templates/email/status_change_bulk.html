@@ -1,0 +1,20 @@
+{% extends "email/base.html" %}
+
+{% block content %}
+<h2>{{ asset_count }} assets are now <span style="color: {{ status_color }};">{{ status_name }}</span></h2>
+<p>
+    <strong>{{ actor_name }}</strong> moved <strong>{{ asset_count }} assets</strong> to
+    <strong style="color: {{ status_color }};">{{ status_name }}</strong>:
+</p>
+<ul>
+    {% for name in asset_names %}
+    <li>{{ name }}</li>
+    {% endfor %}
+</ul>
+{% if more_count %}
+<p>and {{ more_count }} more.</p>
+{% endif %}
+<p>
+    <a href="{{ project_link }}" class="button">View in project</a>
+</p>
+{% endblock %}

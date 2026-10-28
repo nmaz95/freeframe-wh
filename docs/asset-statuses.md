@@ -43,6 +43,14 @@ it notifies; "Don't ask again" skips it for the rest of the browser session.
 Viewers see the status but cannot change it. Share-link guests never see
 statuses.
 
+**Several at once.** Tick the cards (or press ⌘/Ctrl-A, *Select all* in the
+selection bar, or the checkbox in the list view's header), then *Change
+status* in the bar or in the right-click menu of a selected item. One
+confirmation names the count, one request moves them, and the people the
+status notifies are told once (see below). Folders in the selection are
+ignored: a status belongs to an asset. Assets already in that status are
+left alone.
+
 The legacy fixed enum column `assets.status` is kept for smart collections and
 older clients, and is mirrored whenever an asset enters a status that names a
 legacy value (the three above). `PATCH /assets/{id}` with `status` goes
@@ -65,6 +73,13 @@ or nothing.
 In-app notifications read "Marco moved Spot 30s to Needs PM Review"; the email
 says the same and links to the asset. Both snapshot the status name and colour
 at the time, so renaming a status later does not rewrite history.
+
+**Several assets at once.** When several assets are moved together, each
+person hears once: one in-app notification and one email saying "Marco moved
+12 assets to Needs PM Review", listing up to five names, and linking to the
+project filtered on that status. Someone concerned with only one of the
+assets gets the ordinary single-asset message. The grouped notification is
+attached to the first of their assets, so it goes to the trash with it.
 
 ## Pipeline roles
 
@@ -99,8 +114,15 @@ notified.
 | GET / PUT | `/projects/{id}/pipeline-assignments` | member / owner |
 | GET / PUT | `/assets/{id}/pipeline-assignments` | asset access / editor |
 | PUT | `/assets/{id}/status` | reviewer |
+| PUT | `/assets/status` | reviewer |
 | GET | `/projects/{id}/assets?folder_id=&include_subfolders=true&status_id=` | project visible |
 | GET | `/projects/{id}/assets/status-counts?folder_id=` | project visible |
+
+`PUT /assets/status` takes `{"asset_ids": [...], "status_id": "..."}` (up to
+500 ids of one project; another project's id → 400, an unknown or trashed id
+refuses the whole call with 404). Assets already in the status are untouched;
+the response lists every asset in the order asked, and the project stream
+carries one `asset_status_updated` per asset that moved.
 
 `GET /projects/{id}/assets` takes `include_subfolders=true` (with `folder_id`,
 also every folder below it; with `root`, the whole project) and `status_id`

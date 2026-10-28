@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { X, Download, MoreHorizontal, Layers, Share2, Trash2, FolderInput, FolderIcon, Check, Film, Music, Image as ImageIcon, Images } from 'lucide-react'
+import { X, Download, MoreHorizontal, Layers, Share2, Trash2, FolderInput, FolderIcon, Check, Minus, Film, Music, Image as ImageIcon, Images } from 'lucide-react'
 import { cn, formatBytes } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/shared/avatar'
@@ -12,6 +12,7 @@ import { FolderCard } from './folder-card'
 import { AssetMenuItems } from './menus/asset-menu'
 import { WithFolderMenu } from './menus/folder-menu'
 import { SelectionMenuItems, type SelectionActions } from './menus/selection-menu'
+import { ChangeStatusDropdown } from './menus/status-menu'
 import { AppearancePopover } from './appearance-popover'
 import { SortPopover } from './sort-popover'
 import { MoveToDialog } from './move-to-dialog'
@@ -99,6 +100,9 @@ interface AssetGridProps {
   folderPaths?: Record<string, string>
   /** Offered in the menu only when present (reviewer and up). */
   onAssetSetStatus?: (asset: Asset, status: AssetStatusDef) => void
+  /** "Change status" on the selection bar and the selection's right-click
+   *  menu, for the selected assets (folders have no status). */
+  onBulkSetStatus?: (assetIds: string[], status: AssetStatusDef) => void
   /** Actions rendered on the right side of the navigator bar */
   actions?: React.ReactNode
   /** ⌘/Ctrl-A selects everything shown, shift-click selects a range,
@@ -166,6 +170,7 @@ export function AssetGrid({
   statusFilter,
   folderPaths,
   onAssetSetStatus,
+  onBulkSetStatus,
   actions,
   selectionShortcuts = false,
   onDeselectAll,
@@ -259,6 +264,10 @@ export function AssetGrid({
     onDelete: onBulkDelete
       ? () => onBulkDelete(Array.from(selectedAssetIds), Array.from(selectedFolderIds))
       : undefined,
+    statuses,
+    onSetStatus: onBulkSetStatus && selectedAssetIds.size > 0
+      ? (s) => onBulkSetStatus(Array.from(selectedAssetIds), s)
+      : undefined,
   }
 
   /** Right-click on an item that is one of several selected acts on all of
@@ -340,6 +349,22 @@ export function AssetGrid({
 
   const hasSelection = selectedAssetIds.size > 0 || selectedFolderIds.size > 0 || !!selectedAssetId
 
+  // Everything shown: what ⌘/Ctrl-A, "Select all" on the bar and the list
+  // header's checkbox select.
+  const shownFolderIds = React.useMemo(
+    () => (showFolders ? folders!.map((f) => f.id) : []),
+    [showFolders, folders],
+  )
+  const shownCount = filtered.length + shownFolderIds.length
+  const allSelected =
+    shownCount > 0 &&
+    filtered.every((a) => selectedAssetIds.has(a.id)) &&
+    shownFolderIds.every((id) => selectedFolderIds.has(id))
+  const selectAll = React.useCallback(() => {
+    setSelectedAssetIds(new Set(filtered.map((a) => a.id)))
+    setSelectedFolderIds(new Set(shownFolderIds))
+  }, [filtered, shownFolderIds])
+
   React.useEffect(() => {
     if (!selectionShortcuts) return
     function handleKeyDown(e: KeyboardEvent) {
@@ -359,8 +384,7 @@ export function AssetGrid({
       ) return
       if (isSelectAll) {
         e.preventDefault()
-        setSelectedAssetIds(new Set(filtered.map((a) => a.id)))
-        setSelectedFolderIds(new Set(showFolders ? folders!.map((f) => f.id) : []))
+        selectAll()
         return
       }
       if (!hasSelection) return
@@ -371,7 +395,7 @@ export function AssetGrid({
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [selectionShortcuts, filtered, folders, showFolders, hasSelection, onDeselectAll])
+  }, [selectionShortcuts, selectAll, hasSelection, onDeselectAll])
 
   if (isLoading) {
     return (
@@ -567,12 +591,14 @@ export function AssetGrid({
                 onSetStatus={onAssetSetStatus ? (s) => onAssetSetStatus(asset, s) : undefined}
                 contextMenu={selectionMenuFor('asset', asset.id)}
                 onDragStart={(e: React.DragEvent) => {
-                  const ids = selectedAssetIds.has(asset.id)
-                    ? Array.from(selectedIds)
-                    : [asset.id]
+                  // Dragging one of a selection drags the whole selection,
+                  // its folders included.
+                  const inSelection = selectedAssetIds.has(asset.id)
+                  const ids = inSelection ? Array.from(selectedIds) : [asset.id]
+                  const folderIds = inSelection ? Array.from(selectedFolderIds) : []
                   e.dataTransfer.setData(
                     'application/json',
-                    JSON.stringify({ assetIds: ids, folderIds: [] }),
+                    JSON.stringify({ assetIds: ids, folderIds }),
                   )
                   e.dataTransfer.effectAllowed = 'move'
                 }}
@@ -585,7 +611,25 @@ export function AssetGrid({
         <div className="rounded-lg border border-border overflow-hidden">
           {/* Column headers */}
           <div className="flex items-center gap-4 px-3 py-2 border-b border-border bg-bg-secondary/50 text-[10px] text-text-tertiary font-medium uppercase tracking-wider">
-            <div className="h-10 w-10 shrink-0" />
+            <div className="h-10 w-10 shrink-0 flex items-center justify-center">
+              {!shareMode && shownCount > 0 && (
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-label="Select all"
+                  aria-checked={allSelected ? 'true' : totalSelected > 0 ? 'mixed' : 'false'}
+                  onClick={() => (allSelected ? clearSelection() : selectAll())}
+                  className={cn(
+                    'h-4 w-4 rounded border flex items-center justify-center transition-all',
+                    allSelected || totalSelected > 0
+                      ? 'bg-accent border-accent text-white'
+                      : 'border-border hover:border-text-tertiary text-transparent',
+                  )}
+                >
+                  {allSelected ? <Check className="h-2.5 w-2.5" /> : totalSelected > 0 ? <Minus className="h-2.5 w-2.5" /> : null}
+                </button>
+              )}
+            </div>
             <div className="flex-1 min-w-0">Name</div>
             {showUploader && <div className="hidden md:block w-32">Uploader</div>}
             {showFileSize && <div className="hidden sm:block w-24 text-right">Size</div>}
@@ -806,19 +850,27 @@ export function AssetGrid({
 
       {/* Bottom selection action bar (Frame.io style) */}
       {!shareMode && totalSelected > 0 && (
-        <div className="sticky bottom-0 z-20 flex items-center gap-3 rounded-lg border border-border bg-bg-elevated px-4 py-2.5 shadow-xl">
+        <div className="sticky bottom-0 z-20 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-bg-elevated px-4 py-2.5 shadow-xl">
           <button onClick={clearSelection} className="text-text-tertiary hover:text-text-primary transition-colors">
             <X className="h-4 w-4" />
           </button>
-          <span className="text-sm text-text-primary font-medium">
+          <span className="text-sm text-text-primary font-medium whitespace-nowrap">
             {totalSelected} Item{totalSelected !== 1 ? 's' : ''} selected
           </span>
           {selectedTotalSize > 0 && (
-            <span className="text-xs text-text-tertiary">
+            <span className="text-xs text-text-tertiary whitespace-nowrap">
               &middot; {formatBytes(selectedTotalSize)}
             </span>
           )}
+          {!allSelected && (
+            <Button variant="ghost" size="sm" className="text-text-secondary" onClick={selectAll}>
+              Select all
+            </Button>
+          )}
           <div className="flex-1" />
+          {selectionActions.onSetStatus && selectionActions.statuses && selectionActions.statuses.length > 0 && (
+            <ChangeStatusDropdown statuses={selectionActions.statuses} onPick={selectionActions.onSetStatus} />
+          )}
           {selectionActions.onDelete && (
             <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onDelete}>
               <Trash2 className="h-4 w-4" /> Delete

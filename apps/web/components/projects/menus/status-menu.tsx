@@ -48,28 +48,76 @@ function StatusItems({
   )
 }
 
-/** "Set status ▸" inside an asset's ⋯ or right-click menu. */
+/** "Set status ▸" inside an asset's ⋯ or right-click menu; "Change status ▸"
+ *  (any `label`) on a selection of several. */
 export function StatusSubmenu({
   statuses,
   currentId,
   onPick,
+  label = 'Set status',
 }: {
   statuses: AssetStatusDef[]
   currentId: string | null
   onPick: (status: AssetStatusDef) => void
+  label?: string
 }) {
   if (statuses.length === 0) return null
   return (
     <MenuSub>
       <MenuSubTrigger className={cn(menuItemClass, 'data-[state=open]:bg-bg-hover data-[state=open]:text-text-primary')}>
         <CircleDot className="h-3.5 w-3.5 text-text-tertiary" />
-        <span className="flex-1">Set status</span>
+        <span className="flex-1">{label}</span>
         <ChevronRight className="h-3.5 w-3.5 text-text-tertiary" />
       </MenuSubTrigger>
       <MenuSubContent sideOffset={6} className={menuContentClass} onClick={(e) => e.stopPropagation()}>
         <StatusItems statuses={statuses} currentId={currentId} onPick={onPick} />
       </MenuSubContent>
     </MenuSub>
+  )
+}
+
+/**
+ * "Change status" on the selection bar: a plain button that opens the list,
+ * with no current status to mark since the selection may hold several.
+ */
+export function ChangeStatusDropdown({
+  statuses,
+  onPick,
+  className,
+}: {
+  statuses: AssetStatusDef[]
+  onPick: (status: AssetStatusDef) => void
+  className?: string
+}) {
+  const { schedule, onCloseAutoFocus } = useAfterClose()
+  if (statuses.length === 0) return null
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-md px-3 h-8 text-sm font-medium text-text-primary whitespace-nowrap transition-colors outline-none hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent',
+            className,
+          )}
+        >
+          <CircleDot className="h-4 w-4" />
+          Change status
+          <ChevronDown className="h-3 w-3 opacity-70" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          side="top"
+          sideOffset={6}
+          className={menuContentClass}
+          onCloseAutoFocus={onCloseAutoFocus}
+        >
+          <StatusItems statuses={statuses} currentId={null} onPick={(s) => schedule(() => onPick(s))} />
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   )
 }
 

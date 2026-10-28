@@ -469,7 +469,19 @@ export interface StatusChangePayload {
   status_id: string;
   status_name: string;
   status_color: string;
+  /** Set when several assets were moved at once and this person is told
+   *  once for all of them; `asset_id` is then the first of theirs. */
+  asset_count?: number;
+  asset_ids?: string[];
+  /** The first few names; `asset_count` says how many there are in all. */
+  asset_names?: string[];
+  project_id?: string;
   from_status_name: string | null;
+}
+
+/** A grouped status change: several assets, one notification. */
+export function isBulkStatusChange(p: StatusChangePayload | null | undefined): boolean {
+  return (p?.asset_count ?? 1) > 1;
 }
 
 // ─── Asset statuses & pipeline roles ─────────────────────────────────────────

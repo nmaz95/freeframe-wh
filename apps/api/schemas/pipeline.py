@@ -97,3 +97,9 @@ class RoleAssignmentsResponse(BaseModel):
 
 class AssetStatusChange(BaseModel):
     status_id: uuid.UUID
+
+
+class AssetsStatusChange(BaseModel):
+    """Several assets of one project to one status."""
+    asset_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    status_id: uuid.UUID

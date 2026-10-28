@@ -298,6 +298,44 @@ def send_status_change_email(
 
 
 @shared_task(bind=True, queue="email_low", max_retries=3, default_retry_delay=120)
+def send_bulk_status_change_email(
+    self,
+    to_email: str,
+    actor_name: str,
+    asset_count: int,
+    asset_names: list[str],
+    status_name: str,
+    status_color: str,
+    project_link: str,
+):
+    """Several assets were moved to a status whose rule names the recipient:
+    one mail naming them, not one per asset."""
+    try:
+        subject = f"{actor_name} moved {asset_count} assets to {status_name}"
+        more_count = max(asset_count - len(asset_names), 0)
+        html_body = render_template(
+            "email/status_change_bulk.html",
+            subject=subject,
+            actor_name=actor_name,
+            asset_count=asset_count,
+            asset_names=asset_names,
+            more_count=more_count,
+            status_name=status_name,
+            status_color=status_color,
+            project_link=project_link,
+        )
+        listed = ", ".join(asset_names) + (f" and {more_count} more" if more_count else "")
+        text_body = f"{actor_name} moved {asset_count} assets to {status_name}: {listed}.\n\nView: {project_link}"
+
+        success = _send_email(to_email, subject, html_body, text_body)
+        if not success:
+            raise Exception("Email sending failed")
+        return {"status": "sent", "to": to_email}
+    except Exception as exc:
+        self.retry(exc=exc)
+
+
+@shared_task(bind=True, queue="email_low", max_retries=3, default_retry_delay=120)
 def send_project_added_email(
     self,
     to_email: str,

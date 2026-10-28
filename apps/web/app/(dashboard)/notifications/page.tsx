@@ -15,6 +15,7 @@ import { formatRelativeTime } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/empty-state'
 import { cn } from '@/lib/utils'
+import { isBulkStatusChange } from '@/types'
 import type { Notification, NotificationType } from '@/types'
 
 const notificationIcons: Record<NotificationType, React.ElementType> = {
@@ -69,7 +70,9 @@ function NotificationItem({ notification }: { notification: Notification }) {
       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
         <p className="text-sm text-text-primary">
           {notification.type === 'status_change' && notification.payload
-            ? `${notification.actor_name ?? 'Someone'} moved ${notification.asset_name ?? 'an asset'} to ${notification.payload.status_name}`
+            ? isBulkStatusChange(notification.payload)
+              ? `${notification.actor_name ?? 'Someone'} moved ${notification.payload.asset_count} assets to ${notification.payload.status_name}`
+              : `${notification.actor_name ?? 'Someone'} moved ${notification.asset_name ?? 'an asset'} to ${notification.payload.status_name}`
             : notificationLabels[notification.type]}
         </p>
         <p className="text-xs text-text-tertiary">

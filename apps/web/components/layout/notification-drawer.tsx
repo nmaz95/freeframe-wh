@@ -16,6 +16,7 @@ import { withBasePath } from '@/lib/base-path'
 import { useNotificationStore } from '@/stores/notification-store'
 import { formatRelativeTime } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { isBulkStatusChange } from '@/types'
 import type { Notification, NotificationType } from '@/types'
 
 const notificationIcons: Record<NotificationType, React.ElementType> = {
@@ -42,8 +43,15 @@ function getNotificationText(n: Notification): { title: string; subtitle: string
     case 'due_soon':
       return { title: `${asset} is due soon`, subtitle: null }
     case 'status_change': {
-      const to = n.payload?.status_name ?? 'a new status'
-      const from = n.payload?.from_status_name
+      const p = n.payload
+      const to = p?.status_name ?? 'a new status'
+      if (p && isBulkStatusChange(p)) {
+        const names = p.asset_names ?? []
+        const more = (p.asset_count ?? 0) - names.length
+        const subtitle = names.length ? names.join(', ') + (more > 0 ? `, and ${more} more` : '') : null
+        return { title: `${actor} moved ${p.asset_count} assets to ${to}`, subtitle }
+      }
+      const from = p?.from_status_name
       return { title: `${actor} moved ${asset} to ${to}`, subtitle: from ? `was ${from}` : null }
     }
     default:
@@ -58,6 +66,13 @@ function NotificationItem({ notification, onClose }: { notification: Notificatio
 
   function handleClick() {
     if (!notification.read) markAsRead(notification.id)
+    // A grouped status change opens the project filtered on that status.
+    const bulk = notification.payload
+    if (bulk && isBulkStatusChange(bulk) && notification.project_id) {
+      window.location.href = withBasePath(`/projects/${notification.project_id}?status=${bulk.status_id}`)
+      onClose()
+      return
+    }
     // Navigate to asset if possible
     if (notification.project_id && notification.asset_id) {
       const qs = notification.comment_id ? `?commentId=${notification.comment_id}` : ''
