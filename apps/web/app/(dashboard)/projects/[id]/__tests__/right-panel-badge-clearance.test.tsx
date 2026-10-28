@@ -54,7 +54,7 @@ vi.mock('@/stores/view-store', () => ({
   useViewStore: storeHook({ rightPanelOpen: true, sortKey: 'custom', sortDirection: 'asc', viewMode: 'grid' }),
 }))
 vi.mock('@/stores/breadcrumb-store', () => ({
-  useBreadcrumbStore: storeHook({ setExtraCrumbs: vi.fn(), setLabel: vi.fn() }),
+  useBreadcrumbStore: storeHook({ setExtraCrumbs: vi.fn(), setLabel: vi.fn(), setHref: vi.fn() }),
 }))
 vi.mock('@/components/shared/branding-provider', async (orig) => ({
   ...(await orig<typeof import('@/components/shared/branding-provider')>()),

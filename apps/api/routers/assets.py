@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, literal, select
+from sqlalchemy import func, literal, or_, select
 import os
 import uuid
 from datetime import datetime, timezone
@@ -13,7 +13,10 @@ from ..models.project import Project, ProjectMember, ProjectRole
 from ..models.share import AssetShare
 from ..models.activity import Mention, Notification, NotificationType
 from ..models.comment import Comment, COMMENT_TREE_MAX_DEPTH
-from ..schemas.asset import AssetResponse, AssetVersionResponse, AssetUpdate, StreamUrlResponse, MediaFileResponse, DownloadOption
+from ..schemas.asset import (
+    AssetResponse, AssetVersionResponse, AssetUpdate, StreamUrlResponse, MediaFileResponse,
+    DownloadOption, StatusCountsResponse,
+)
 from ..schemas.notification import AssignmentUpdate
 from ..services.permissions import require_project_role, require_project_visible, require_asset_access, can_access_asset
 from ..services.s3_service import generate_presigned_get_url, build_download_filename
@@ -28,10 +31,11 @@ from ..schemas.upload import (
 )
 from ..services.storage import choose_part_size, upload_guard_error
 from ..services.versions import next_version_number
-from ..services.status_notifications import change_asset_status
+from ..services.status_notifications import change_asset_status, get_default_status, live_statuses
 from ..models.pipeline import AssetStatusDef
 from ..services.s3_service import create_multipart_upload
 from .upload import storage_initiate_error
+from .folders import _get_descendant_ids
 
 router = APIRouter(tags=["assets"])
 
@@ -208,26 +212,57 @@ def _build_asset_responses_bulk(assets: list[Asset], db: Session) -> list[AssetR
     return result
 
 
-@router.get("/projects/{project_id}/assets", response_model=list[AssetResponse])
-def list_assets(
-    project_id: uuid.UUID,
-    include_failed: bool = Query(False, description="Include assets whose latest version failed processing"),
-    folder_id: Optional[str] = Query(None, description="Filter by folder. 'root' for root level, UUID for specific folder."),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    # Allow access if user is a project member OR the project is public
-    require_project_visible(db, project_id, current_user)
+def _folder_scope(
+    db: Session, folder_id: Optional[str], include_subfolders: bool,
+) -> Optional[list[uuid.UUID]]:
+    """Which folders a listing covers: None for the whole project, [] for the
+    root level only, else the folder ids to match.
 
+    'root' with `include_subfolders` is the whole project: the root and every
+    folder below it is everything there is.
+    """
+    if folder_id is None:
+        return None
+    if folder_id == "root":
+        return None if include_subfolders else []
+    fid = uuid.UUID(folder_id)
+    return [fid, *_get_descendant_ids(db, fid)] if include_subfolders else [fid]
+
+
+def _status_clause(db: Session, status_id: uuid.UUID):
+    """`status_id` as the web reads it: the default status also owns every
+    asset with no status (the column is NULL until something moves it)."""
+    default = get_default_status(db)
+    if default is not None and default.id == status_id:
+        return or_(Asset.status_id.is_(None), Asset.status_id == status_id)
+    return Asset.status_id == status_id
+
+
+def _list_asset_rows(
+    db: Session,
+    project_id: uuid.UUID,
+    *,
+    folder_id: Optional[str],
+    include_subfolders: bool,
+    include_failed: bool,
+    status_id: Optional[uuid.UUID],
+) -> list[Asset]:
+    """The rows `GET /projects/{id}/assets` lists; the status counts tally the
+    same rows, so the sidebar's numbers are what a click shows."""
     query = db.query(Asset).filter(
         Asset.project_id == project_id,
         Asset.deleted_at.is_(None),
     )
 
-    if folder_id == "root":
-        query = query.filter(Asset.folder_id.is_(None))
-    elif folder_id is not None:
-        query = query.filter(Asset.folder_id == uuid.UUID(folder_id))
+    scope = _folder_scope(db, folder_id, include_subfolders)
+    if scope is not None:
+        if not scope:
+            query = query.filter(Asset.folder_id.is_(None))
+        else:
+            query = query.filter(Asset.folder_id.in_(scope))
+
+    if status_id is not None:
+        query = query.filter(_status_clause(db, status_id))
 
     assets = query.all()
 
@@ -252,7 +287,64 @@ def list_assets(
             )
             assets = [a for a in assets if a.id in usable or a.id not in has_any_version]
 
+    return assets
+
+
+@router.get("/projects/{project_id}/assets", response_model=list[AssetResponse])
+def list_assets(
+    project_id: uuid.UUID,
+    include_failed: bool = Query(False, description="Include assets whose latest version failed processing"),
+    folder_id: Optional[str] = Query(None, description="Filter by folder. 'root' for root level, UUID for specific folder."),
+    include_subfolders: bool = Query(
+        False,
+        description="With folder_id: also the assets of every folder below it; with 'root', every asset of the project.",
+    ),
+    status_id: Optional[uuid.UUID] = Query(
+        None,
+        description="Only assets in this status. The default status also matches assets with no status set.",
+    ),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Allow access if user is a project member OR the project is public
+    require_project_visible(db, project_id, current_user)
+
+    assets = _list_asset_rows(
+        db, project_id,
+        folder_id=folder_id, include_subfolders=include_subfolders,
+        include_failed=include_failed, status_id=status_id,
+    )
     return _build_asset_responses_bulk(assets, db)
+
+
+@router.get("/projects/{project_id}/assets/status-counts", response_model=StatusCountsResponse)
+def asset_status_counts(
+    project_id: uuid.UUID,
+    folder_id: Optional[str] = Query(None, description="The folder whose subtree is counted; 'root' or absent for the whole project."),
+    include_failed: bool = Query(False, description="Count assets whose latest version failed processing"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """How many assets sit in each status, in a folder and every folder below
+    it: the numbers beside the sidebar's statuses. Assets with no status, or a
+    status that no longer exists, count towards the default; statuses with
+    nothing in them are left out."""
+    require_project_visible(db, project_id, current_user)
+
+    rows = _list_asset_rows(
+        db, project_id,
+        folder_id=folder_id, include_subfolders=True,
+        include_failed=include_failed, status_id=None,
+    )
+    live = {s.id for s in live_statuses(db)}
+    default = get_default_status(db)
+    counts: dict[uuid.UUID, int] = {}
+    for a in rows:
+        key = a.status_id if a.status_id in live else (default.id if default else None)
+        if key is None:
+            continue
+        counts[key] = counts.get(key, 0) + 1
+    return StatusCountsResponse(counts=counts)
 
 
 # Declared before `/assets/{asset_id}`: routes match in order, and after it

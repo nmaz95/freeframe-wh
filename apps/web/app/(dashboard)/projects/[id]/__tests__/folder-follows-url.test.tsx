@@ -44,7 +44,7 @@ vi.mock('@/stores/auth-store', () => ({ useAuthStore: storeHook({ user: { id: 'u
 vi.mock('@/stores/view-store', () => ({
   useViewStore: storeHook({ rightPanelOpen: false, sortKey: 'custom', sortDirection: 'asc', viewMode: 'grid' }),
 }))
-vi.mock('@/stores/breadcrumb-store', () => ({ useBreadcrumbStore: storeHook({ setExtraCrumbs: vi.fn(), setLabel: vi.fn() }) }))
+vi.mock('@/stores/breadcrumb-store', () => ({ useBreadcrumbStore: storeHook({ setExtraCrumbs: vi.fn(), setLabel: vi.fn(), setHref: vi.fn() }) }))
 vi.mock('@/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], resolveComment: vi.fn(), deleteComment: vi.fn(), addReaction: vi.fn(), removeReaction: vi.fn(), createComment: vi.fn() }),
 }))

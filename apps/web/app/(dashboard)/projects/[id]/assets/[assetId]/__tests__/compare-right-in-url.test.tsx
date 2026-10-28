@@ -96,7 +96,7 @@ vi.mock('@/stores/upload-store', () => ({
 }))
 vi.mock('@/stores/view-store', () => ({ useViewStore: storeHook({ sortKey: 'custom', sortDirection: 'asc' }) }))
 vi.mock('@/stores/breadcrumb-store', () => ({
-  useBreadcrumbStore: storeHook({ setExtraCrumbs: vi.fn(), setLabel: vi.fn() }),
+  useBreadcrumbStore: storeHook({ setExtraCrumbs: vi.fn(), setLabel: vi.fn(), setHref: vi.fn() }),
 }))
 vi.mock('@/lib/api', () => ({ api: { get: vi.fn().mockResolvedValue([]), post: vi.fn() } }))
 vi.mock('@/components/review/video-player', () => ({ VideoPlayer: () => null }))

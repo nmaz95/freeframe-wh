@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Film, Music, Image as ImageIcon, Images, MoreHorizontal, Check } from 'lucide-react'
+import { Film, Music, Image as ImageIcon, Images, MoreHorizontal, Check, FolderIcon } from 'lucide-react'
 import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
 import type { Asset, AssetStatusDef, AssetType, DownloadOption, User } from '@/types'
 import { StatusDot } from '@/components/shared/status-badge'
@@ -29,6 +29,9 @@ interface AssetCardProps {
   versionCount?: number
   assignee?: User | null
   authorName?: string
+  /** "Client / Spot": where the asset sits, shown while a status filter lists
+   *  several folders as one. */
+  folderPath?: string
   thumbnailUrl?: string | null
   commentCount?: number
   duration?: number | null
@@ -78,6 +81,7 @@ export function AssetCard({
   versionCount = 1,
   assignee,
   authorName,
+  folderPath,
   thumbnailUrl,
   commentCount,
   duration,
@@ -211,8 +215,14 @@ export function AssetCard({
             </DotsMenu>
           </div>
 
-          {/* Author + date + file size row */}
+          {/* Folder (while filtering) + author + date + file size row */}
           <p className="text-2xs text-text-tertiary line-clamp-1">
+            {folderPath && (
+              <span>
+                <FolderIcon className="inline h-3 w-3 mr-1 align-[-2px]" aria-hidden />
+                {folderPath} &bull;{' '}
+              </span>
+            )}
             {showUploader && authorName && <span>{authorName} &bull; </span>}
             {formatRelativeTime(asset.created_at)}
             {showFileSize && fileSize ? <span> &bull; {formatBytes(fileSize)}</span> : null}

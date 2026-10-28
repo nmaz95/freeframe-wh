@@ -96,7 +96,7 @@ vi.mock('@/stores/review-store', () => ({
 }))
 vi.mock('@/stores/view-store', () => ({ useViewStore: storeHook(viewState) }))
 vi.mock('@/stores/breadcrumb-store', () => ({
-  useBreadcrumbStore: storeHook({ setExtraCrumbs: vi.fn(), setLabel: vi.fn() }),
+  useBreadcrumbStore: storeHook({ setExtraCrumbs: vi.fn(), setLabel: vi.fn(), setHref: vi.fn() }),
 }))
 vi.mock('@/lib/api', async (orig) => ({
   ...(await orig<typeof import('@/lib/api')>()),

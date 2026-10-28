@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import useSWR from "swr";
+import useSWR, { type KeyedMutator } from "swr";
 import Link from "next/link";
 import {
   Upload,
@@ -42,7 +42,8 @@ import { useBreadcrumbStore } from "@/stores/breadcrumb-store";
 import { useComments } from "@/hooks/use-comments";
 import { useFolders, useTrash } from "@/hooks/use-folders";
 import { useShareLinks } from "@/hooks/use-share-links";
-import { useAssetStatuses } from "@/hooks/use-asset-statuses";
+import { useAssetStatuses, useStatusCounts } from "@/hooks/use-asset-statuses";
+import { projectUrl } from "@/lib/project-url";
 import { useStatusChangeConfirm } from "@/hooks/use-status-change-confirm";
 import { useSSE } from "@/hooks/use-sse";
 import { StatusDot } from "@/components/shared/status-badge";
@@ -90,42 +91,42 @@ export default function ProjectDetailPage() {
 
   const [showTrash, setShowTrash] = React.useState(false);
   const [showShareLinks, setShowShareLinks] = React.useState(false);
-  // The sidebar's Statuses filter: one status id, or everything. Kept in the
-  // URL so a filtered view can be linked and survives a reload.
-  const [statusFilter, setStatusFilterState] = React.useState<string | null>(
-    searchParams.get("status") || null,
-  );
-  const setStatusFilter = React.useCallback((id: string | null) => {
-    setStatusFilterState(id);
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    if (id) url.searchParams.set("status", id);
-    else url.searchParams.delete("status");
-    window.history.replaceState(window.history.state, "", url.toString());
-  }, []);
   const { statuses, statusFor, rankOf } = useAssetStatuses();
   const { confirmStatusChange, statusConfirmDialog } = useStatusChangeConfirm();
   const [selectedShareLink, setSelectedShareLink] = React.useState<
     string | null
   >(null);
 
-  // The URL is the one source of truth for the folder: the tree, the
-  // breadcrumb, the browser's back and forward and a pasted link all change
-  // it, and the view follows. The trash and share-link views sit on top of
-  // it and show no folder while they are open.
+  // The URL is the one source of truth for the folder and for the sidebar's
+  // status filter: the tree, the breadcrumb, the status buttons, the browser's
+  // back and forward and a pasted link all change it, and the view follows.
+  // The trash and share-link views sit on top of it and show neither while
+  // they are open.
   const urlFolderId = searchParams.get("folder") || null;
+  const urlStatusId = searchParams.get("status") || null;
   const currentFolderId = showTrash || showShareLinks ? null : urlFolderId;
+  const statusFilter = showTrash || showShareLinks ? null : urlStatusId;
 
-  // A folder change in the URL (a breadcrumb, back or forward) leaves those
-  // views: the user asked for a folder. Done during render, which React
-  // recommends over an effect for state that follows a value.
-  const [seenFolderId, setSeenFolderId] = React.useState(urlFolderId);
-  if (urlFolderId !== seenFolderId) {
-    setSeenFolderId(urlFolderId);
+  // A change of folder or status in the URL (a breadcrumb, back or forward)
+  // leaves those views: the user asked for assets. Done during render, which
+  // React recommends over an effect for state that follows a value.
+  const viewKey = `${urlFolderId ?? ""}|${urlStatusId ?? ""}`;
+  const [seenViewKey, setSeenViewKey] = React.useState(viewKey);
+  if (viewKey !== seenViewKey) {
+    setSeenViewKey(viewKey);
     setShowTrash(false);
     setShowShareLinks(false);
     setSelectedShareLink(null);
   }
+
+  // One status id, or everything. Written through the router so the page,
+  // which reads it from the URL, follows; the folder in view is kept.
+  const setStatusFilter = React.useCallback(
+    (id: string | null) => {
+      router.replace(projectUrl(projectId, { folder: urlFolderId, status: id }), { scroll: false });
+    },
+    [projectId, router, urlFolderId],
+  );
   const [folderDialogOpen, setFolderDialogOpen] = React.useState(false);
   const [folderDialogParentId, setFolderDialogParentId] = React.useState<
     string | null
@@ -210,7 +211,13 @@ export default function ProjectDetailPage() {
   // Register project name for header breadcrumb + page title
   usePageTitle(project?.name ?? null);
   const setLabel = useBreadcrumbStore((s) => s.setLabel);
+  const setHref = useBreadcrumbStore((s) => s.setHref);
   const setExtraCrumbs = useBreadcrumbStore((s) => s.setExtraCrumbs);
+  // The project crumb keeps the status filter, as the folder crumbs do.
+  React.useEffect(() => {
+    setHref(projectId, urlStatusId ? projectUrl(projectId, { status: urlStatusId }) : null);
+    return () => setHref(projectId, null);
+  }, [projectId, urlStatusId, setHref]);
   React.useEffect(() => {
     if (project?.name) setLabel(projectId, project.name);
   }, [project?.name, projectId, setLabel]);
@@ -237,20 +244,51 @@ export default function ProjectDetailPage() {
     }
     const path = findPath(tree, currentFolderId, []) ?? []
     setExtraCrumbs(
-      path.map((f) => ({ label: f.name, href: `/projects/${projectId}?folder=${f.id}` }))
+      path.map((f) => ({ label: f.name, href: projectUrl(projectId, { folder: f.id, status: urlStatusId }) }))
     );
-  }, [currentFolderId, tree, projectId, setExtraCrumbs]);
+  }, [currentFolderId, tree, projectId, setExtraCrumbs, urlStatusId]);
+
+  // Where each folder sits, as "Client / Spot": shown on every asset while a
+  // status filter flattens the folder and what is below it into one list.
+  const folderPaths = React.useMemo(() => {
+    const paths: Record<string, string> = {};
+    function walk(nodes: NonNullable<typeof tree>, trail: string[]) {
+      for (const node of nodes) {
+        const here = [...trail, node.name];
+        paths[node.id] = here.join(" / ");
+        walk(node.children, here);
+      }
+    }
+    walk(tree ?? [], []);
+    return paths;
+  }, [tree]);
 
   const folderParam = currentFolderId
     ? `folder_id=${currentFolderId}`
     : "folder_id=root";
+  // A status filter lists the folder and every folder below it, filtered on
+  // the server; otherwise the folder alone, as before.
+  const assetsKey = showTrash
+    ? null
+    : statusFilter
+      ? `/projects/${projectId}/assets?${folderParam}&include_subfolders=true&status_id=${statusFilter}`
+      : `/projects/${projectId}/assets?${folderParam}`;
   const {
     data: assets,
     isLoading: loadingAssets,
-    mutate: mutateAssets,
-  } = useSWR<AssetResponse[]>(
-    showTrash ? null : `/projects/${projectId}/assets?${folderParam}`,
-    (key: string) => api.get<AssetResponse[]>(key),
+    mutate: mutateAssetList,
+  } = useSWR<AssetResponse[]>(assetsKey, (key: string) => api.get<AssetResponse[]>(key));
+
+  // The sidebar's counts cover the same folder subtree a status click shows.
+  // Whatever changes the list (a move, an upload, a status change, a delete)
+  // changes them too, so every `mutateAssets` refreshes both.
+  const { counts: statusCounts, mutate: mutateStatusCounts } = useStatusCounts(projectId, urlFolderId);
+  const mutateAssets = React.useCallback<KeyedMutator<AssetResponse[]>>(
+    (...args) => {
+      void mutateStatusCounts();
+      return mutateAssetList(...args);
+    },
+    [mutateAssetList, mutateStatusCounts],
   );
 
   // Someone else moving an asset shows on its card without a reload.
@@ -273,16 +311,6 @@ export default function ProjectDetailPage() {
     },
     [mutateAssets, toast, confirmStatusChange, statusFor],
   );
-
-  // How many assets in view sit in each status, for the sidebar.
-  const statusCounts = React.useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const a of assets ?? []) {
-      const s = statusFor(a);
-      if (s) counts[s.id] = (counts[s.id] ?? 0) + 1;
-    }
-    return counts;
-  }, [assets, statusFor]);
 
   // Subfolders for current view
   const { data: subfolders, mutate: mutateSubfolders } = useSWR<Folder[]>(
@@ -573,15 +601,12 @@ export default function ProjectDetailPage() {
       setShowTrash(false);
       setShowShareLinks(false);
       setSelectedShareLink(null);
-      const url = folderId
-        ? `/projects/${projectId}?folder=${folderId}`
-        : `/projects/${projectId}`;
       // Through the router, not history.replaceState: the router has to know
       // where we are, or a breadcrumb back to a folder it still believes we
       // are in is a navigation to "the same place" and changes nothing.
-      router.replace(url, { scroll: false });
+      router.replace(projectUrl(projectId, { folder: folderId, status: urlStatusId }), { scroll: false });
     },
-    [projectId, router],
+    [projectId, router, urlStatusId],
   );
 
   return (
@@ -955,6 +980,7 @@ export default function ProjectDetailPage() {
               statusFor={statusFor}
               rankOf={rankOf}
               statusFilter={statusFilter}
+              folderPaths={statusFilter ? folderPaths : undefined}
               onAssetSetStatus={canSetStatus ? handleSetStatus : undefined}
               selectionShortcuts
               onDeselectAll={() => setSelectedAsset(null)}

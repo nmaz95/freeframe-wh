@@ -3,7 +3,7 @@
 import * as React from 'react'
 import useSWR from 'swr'
 import { api } from '@/lib/api'
-import type { AssetStatusDef, PipelineRole } from '@/types'
+import type { AssetStatusDef, PipelineRole, StatusCounts } from '@/types'
 
 const STATUSES_KEY = '/statuses'
 const ROLES_KEY = '/pipeline-roles'
@@ -48,6 +48,18 @@ export function usePipelineRoles() {
     (key: string) => api.get<PipelineRole[]>(key),
   )
   return { roles: React.useMemo(() => data ?? [], [data]), error, isLoading, mutate }
+}
+
+const NO_COUNTS: Record<string, number> = Object.freeze({})
+
+/** The sidebar's per-status counts for a folder and every folder below it
+ *  (`folderId` null = the whole project): the numbers a status click shows. */
+export function useStatusCounts(projectId: string | null, folderId: string | null) {
+  const key = projectId
+    ? `/projects/${projectId}/assets/status-counts?folder_id=${folderId ?? 'root'}`
+    : null
+  const { data, mutate } = useSWR<StatusCounts>(key, (k: string) => api.get<StatusCounts>(k))
+  return { counts: data?.counts ?? NO_COUNTS, mutate }
 }
 
 export { STATUSES_KEY, ROLES_KEY }

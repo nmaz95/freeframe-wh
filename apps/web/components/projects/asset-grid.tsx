@@ -91,8 +91,12 @@ interface AssetGridProps {
   statusFor?: (asset: Asset) => AssetStatusDef | null
   /** Pipeline order, for the Status sort. */
   rankOf?: StatusRank
-  /** Only assets in this status are shown. */
+  /** Only assets in this status are shown: the folder and every folder
+   *  below it as one list, so the folder cards are hidden. */
   statusFilter?: string | null
+  /** Folder id → "Client / Spot", shown on each asset while a status filter
+   *  flattens the folders; absent, nothing is shown. */
+  folderPaths?: Record<string, string>
   /** Offered in the menu only when present (reviewer and up). */
   onAssetSetStatus?: (asset: Asset, status: AssetStatusDef) => void
   /** Actions rendered on the right side of the navigator bar */
@@ -160,6 +164,7 @@ export function AssetGrid({
   statusFor,
   rankOf,
   statusFilter,
+  folderPaths,
   onAssetSetStatus,
   actions,
   selectionShortcuts = false,
@@ -273,7 +278,8 @@ export function AssetGrid({
     return sortAssets(shown, sortKey, sortDirection, rankOf)
   }, [assets, sortKey, sortDirection, rankOf, statusFilter, statusFor])
 
-  const showFolders = !flattenFolders && folders && folders.length > 0
+  // A status filter lists the folder's subtree as one flat list: no folder cards.
+  const showFolders = !flattenFolders && !statusFilter && folders && folders.length > 0
 
   /** Add every folder and asset between the anchor and this item, in the
    *  order shown: folders first, then assets. */
@@ -505,12 +511,20 @@ export function AssetGrid({
       {/* ─── Assets (grid) ───────────────────────────────────────────── */}
       {filtered.length === 0 && !showFolders ? (
         <div className="rounded-lg border border-border bg-bg-secondary">
-          <EmptyState
-            icon={Layers}
-            title="No assets"
-            description="Upload your first asset to get started."
-            action={onUpload ? { label: 'Upload', onClick: onUpload } : undefined}
-          />
+          {statusFilter ? (
+            <EmptyState
+              icon={Layers}
+              title="No assets in this status"
+              description="Nothing in this folder or the folders inside it has that status."
+            />
+          ) : (
+            <EmptyState
+              icon={Layers}
+              title="No assets"
+              description="Upload your first asset to get started."
+              action={onUpload ? { label: 'Upload', onClick: onUpload } : undefined}
+            />
+          )}
         </div>
       ) : layout === 'grid' && filtered.length > 0 ? (
         <div className={cn('grid gap-3', gridColsMap[cardSize])}>
@@ -532,6 +546,7 @@ export function AssetGrid({
                 commentCount={asset.comment_count}
                 assignee={asset.assignee_id ? assignees[asset.assignee_id] : null}
                 authorName={authorNames[asset.created_by]}
+                folderPath={asset.folder_id ? folderPaths?.[asset.folder_id] : undefined}
                 thumbnailUrl={thumbnails[asset.id]}
                 fileSize={fileSizes[asset.id] ?? null}
                 selected={selectedAssetIds.has(asset.id)}
@@ -680,6 +695,7 @@ export function AssetGrid({
             const fileSize = fileSizes[asset.id]
             const versionCount = versionCounts[asset.id]
             const author = authorNames[asset.created_by]
+            const folderPath = asset.folder_id ? folderPaths?.[asset.folder_id] : undefined
             const TypeIcon = assetTypeIcons[asset.asset_type] ?? ImageIcon
             const status = statusFor ? statusFor(asset) : null
             const assetMenu = (
@@ -732,10 +748,18 @@ export function AssetGrid({
                     </div>
                   </button>
                 </div>
-                {/* Name + status */}
-                <div className="flex-1 min-w-0 flex items-center gap-2">
-                  <p className="text-sm font-medium text-text-primary truncate leading-snug">{asset.name}</p>
-                  {status && <StatusBadge status={status} className="hidden sm:inline-flex shrink-0" />}
+                {/* Name + status, and the folder while a status filter flattens them */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-text-primary truncate leading-snug">{asset.name}</p>
+                    {status && <StatusBadge status={status} className="hidden sm:inline-flex shrink-0" />}
+                  </div>
+                  {folderPath && (
+                    <p className="flex items-center gap-1 text-2xs text-text-tertiary truncate">
+                      <FolderIcon className="h-3 w-3 shrink-0" aria-hidden />
+                      <span className="truncate">{folderPath}</span>
+                    </p>
+                  )}
                 </div>
                 {/* Uploader */}
                 {showUploader && (

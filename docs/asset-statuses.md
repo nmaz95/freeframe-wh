@@ -26,6 +26,15 @@ An instance has one ordered list of statuses, managed by a superadmin under
   and the *Status* sort use.
 - **Colour.** Any `#rrggbb`. Shown as a dot on cards, a badge in the list view
   and a pill in the review header.
+- **Filter.** The project sidebar's *Statuses* section filters the grid to
+  the assets in that status **in the folder in view and every folder below
+  it** (at the project root, the whole project). The folder cards are hidden
+  while a filter is on and each asset names its folder instead, as
+  "Client / Spot"; the count beside each status covers the same folders.
+  The filter lives in the URL (`?status=`, next to `?folder=`), so a filtered
+  view can be linked, survives a reload and stays on while you open folders
+  from the tree or the breadcrumb; click the status again, or *Clear*, to
+  drop it.
 
 Reviewers and up change an asset's status from the card's ⋯ menu, the
 right-click menu, the review header pill, or the *Fields* tab of the review
@@ -90,6 +99,15 @@ notified.
 | GET / PUT | `/projects/{id}/pipeline-assignments` | member / owner |
 | GET / PUT | `/assets/{id}/pipeline-assignments` | asset access / editor |
 | PUT | `/assets/{id}/status` | reviewer |
+| GET | `/projects/{id}/assets?folder_id=&include_subfolders=true&status_id=` | project visible |
+| GET | `/projects/{id}/assets/status-counts?folder_id=` | project visible |
+
+`GET /projects/{id}/assets` takes `include_subfolders=true` (with `folder_id`,
+also every folder below it; with `root`, the whole project) and `status_id`
+(only that status; the default status also matches assets with none set).
+`status-counts` returns `{"counts": {"<status_id>": n}}` for the folder and
+every folder below it, with no entry for a status nothing is in; assets with
+no status count towards the default.
 
 `AssetResponse.status_id` names the asset's status (`null` reads as the
 default). The project event stream emits `asset_status_updated`
