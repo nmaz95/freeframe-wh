@@ -29,6 +29,7 @@ import * as Switch from '@radix-ui/react-switch'
 import { cn, copyToClipboard, dateInputValue, endOfDayISO } from '@/lib/utils'
 import { withBasePath } from '@/lib/base-path'
 import { Button } from '@/components/ui/button'
+import { CopyAnnouncer, CopyButton, useCopyStatus } from '@/components/shared/copy-button'
 import { api } from '@/lib/api'
 import {
   ShareAppearanceFields,
@@ -95,63 +96,6 @@ function buildShareUrl(token: string): string {
   return typeof window !== 'undefined'
     ? `${window.location.origin}${withBasePath(`/share/${token}`)}`
     : withBasePath(`/share/${token}`)
-}
-
-// ─── Copy button ─────────────────────────────────────────────────────────────
-
-type CopyStatus = 'idle' | 'copied' | 'failed'
-
-function useCopyStatus(text: string) {
-  const [status, setStatus] = React.useState<CopyStatus>('idle')
-
-  async function copy() {
-    const ok = await copyToClipboard(text)
-    if (ok) {
-      setStatus('copied')
-      setTimeout(() => setStatus('idle'), 2000)
-    } else {
-      setStatus('failed')
-      setTimeout(() => setStatus('idle'), 3000)
-    }
-  }
-
-  return { status, copy }
-}
-
-function CopyAnnouncer({ status }: { status: CopyStatus }) {
-  return (
-    <div className="sr-only" aria-live="polite" role="status">
-      {status === 'copied' ? 'URL copied to clipboard' : status === 'failed' ? 'Copy failed' : ''}
-    </div>
-  )
-}
-
-function CopyButton({ text, label }: { text: string; label?: string }) {
-  const { status, copy: handleCopy } = useCopyStatus(text)
-
-  return (
-    <>
-      <CopyAnnouncer status={status} />
-      <Button variant="secondary" size="sm" onClick={handleCopy}>
-        {status === 'copied' ? (
-          <>
-            <Check className="h-3.5 w-3.5 text-status-success" />
-            {label ? 'Copied!' : ''}
-          </>
-        ) : status === 'failed' ? (
-          <>
-            <X className="h-3.5 w-3.5 text-status-error" />
-            {label ? 'Failed' : ''}
-          </>
-        ) : (
-          <>
-            <Copy className="h-3.5 w-3.5" />
-            {label ?? ''}
-          </>
-        )}
-      </Button>
-    </>
-  )
 }
 
 // ─── Share Invite Input (autocomplete for user search) ──────────────────────

@@ -22,9 +22,12 @@ under a shared "Deliveries" folder with one subfolder per client.
   connection and works for files of any size. The dialog follows it; the
   sender gets an in-app notification with the link when it is done or if it
   failed, and the Fields panel keeps the history of every copy.
-- When the copy is done, the dialog offers to move the asset to a status named
-  **Delivered**, if one exists (Admin Dashboard → Statuses). That move is a
-  normal status change: the people the status notifies are told.
+- When the copy is done, the dialog shows two links, each with **Copy**: the
+  Drive folder the file went to and the file itself (the file's link is the one
+  Drive returns; the folder's is built from the folder's id). They are there
+  to paste into a mail or a chat. The dialog then offers to move the asset to
+  a status named **Delivered**, if one exists (Admin Dashboard → Statuses).
+  That move is a normal status change: the people the status notifies are told.
 
 ## Setting it up (Google Cloud Console)
 

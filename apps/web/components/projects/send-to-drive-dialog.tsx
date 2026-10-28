@@ -3,13 +3,15 @@
 import * as React from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import useSWR, { mutate as globalMutate } from 'swr'
-import { CheckCircle2, CloudUpload, ExternalLink, Folder, X } from 'lucide-react'
+import { CheckCircle2, CloudUpload, ExternalLink, FileAudio, FileImage, FileVideo, Folder, Images, X, type LucideIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
 import { withBasePath } from '@/lib/base-path'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { StatusDot } from '@/components/shared/status-badge'
+import { CopyButton } from '@/components/shared/copy-button'
+import { driveFolderLink, shortDriveUrl, splitFolderName } from '@/lib/google-drive-links'
 import { GOOGLE_STATUS_KEY } from '@/components/settings/google-drive-connection'
 import { deliveriesKey } from '@/components/projects/asset-deliveries-panel'
 import { pickDriveFolder } from '@/lib/google-picker'
@@ -53,6 +55,55 @@ export function defaultDriveFileName(asset: AssetResponse): string {
   const ext = original.includes('.') ? original.slice(original.lastIndexOf('.')) : ''
   const stem = version ? `${asset.name} v${version}` : asset.name
   return stem.toLowerCase().endsWith(ext.toLowerCase()) ? stem : `${stem}${ext}`
+}
+
+function fileIconFor(assetType: string): LucideIcon {
+  switch (assetType) {
+    case 'audio': return FileAudio
+    case 'image': return FileImage
+    case 'image_carousel': return Images
+    default: return FileVideo
+  }
+}
+
+/** One of the two links of a finished copy: name, short URL, open, copy. */
+function DriveLinkRow({
+  label, icon: Icon, prefix, title, href, what,
+}: {
+  label: string
+  icon: LucideIcon
+  prefix?: string
+  title: string
+  href: string
+  /** "folder" / "file", for the buttons' names. */
+  what: string
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-2xs font-medium uppercase tracking-wide text-text-tertiary">{label}</p>
+      <div className="flex items-center gap-2 rounded-md border border-border bg-bg-tertiary/40 px-3 py-2 text-sm">
+        <Icon className="h-4 w-4 shrink-0 text-text-tertiary" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate">
+            {prefix && <span className="text-text-tertiary">{prefix}</span>}
+            <span className="font-medium text-text-primary">{title}</span>
+          </p>
+          <p className="truncate text-2xs text-text-tertiary">{shortDriveUrl(href)}</p>
+        </div>
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Open ${what} in Drive`}
+          title={`Open ${what} in Drive`}
+          className="shrink-0 rounded-md p-1.5 text-text-tertiary transition-colors hover:bg-bg-hover hover:text-text-primary"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </a>
+        <CopyButton text={href} label="Copy" aria-label={`Copy ${what} link`} className="shrink-0" />
+      </div>
+    </div>
+  )
 }
 
 /**
@@ -277,11 +328,27 @@ export function SendToDriveDialog({
               </Dialog.Title>
               <Dialog.Description className="mt-1 text-xs text-text-tertiary">
                 {delivery?.file_name} is now in {delivery?.folder_name}
+                {google?.connected && google.email ? ` · as ${google.email}` : ''}
               </Dialog.Description>
-              {delivery?.web_view_link && (
-                <a href={delivery.web_view_link} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-text-primary hover:border-border-focus">
-                  <ExternalLink className="h-3.5 w-3.5" /> Open in Drive
-                </a>
+              {delivery && (
+                <div className="mt-4 space-y-3">
+                  <DriveLinkRow
+                    label="Folder"
+                    icon={Folder}
+                    what="folder"
+                    href={driveFolderLink(delivery.folder_id)}
+                    {...splitFolderName(delivery.folder_name)}
+                  />
+                  {delivery.web_view_link && (
+                    <DriveLinkRow
+                      label="File"
+                      icon={fileIconFor(asset.asset_type)}
+                      what="file"
+                      href={delivery.web_view_link}
+                      title={delivery.file_name}
+                    />
+                  )}
+                </div>
               )}
               {offerDelivered && delivered ? (
                 <div className="mt-4 border-t border-border pt-3">
