@@ -31,7 +31,11 @@ function isUuid(s: string): boolean {
  */
 const SKIP_SEGMENTS = new Set(['assets', 'collections'])
 
-function buildBreadcrumbs(pathname: string, dynamicLabels: Record<string, string>): { label: string; href: string }[] {
+function buildBreadcrumbs(
+  pathname: string,
+  dynamicLabels: Record<string, string>,
+  hrefs: Record<string, string> = {},
+): { label: string; href: string }[] {
   const segments = pathname.split('/').filter(Boolean)
   const crumbs: { label: string; href: string }[] = []
 
@@ -46,7 +50,7 @@ function buildBreadcrumbs(pathname: string, dynamicLabels: Record<string, string
       dynamicLabels[segment] ??
       LABEL_MAP[segment] ??
       segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ')
-    crumbs.push({ label, href: path })
+    crumbs.push({ label, href: hrefs[segment] ?? path })
   }
 
   return crumbs
@@ -55,8 +59,8 @@ function buildBreadcrumbs(pathname: string, dynamicLabels: Record<string, string
 export function Header({ onSearchOpen }: HeaderProps) {
   const pathname = usePathname()
   const { rightPanelOpen, toggleRightPanel } = useViewStore()
-  const { labels, extraCrumbs } = useBreadcrumbStore()
-  const urlCrumbs = buildBreadcrumbs(pathname, labels)
+  const { labels, extraCrumbs, hrefs } = useBreadcrumbStore()
+  const urlCrumbs = buildBreadcrumbs(pathname, labels, hrefs)
   const breadcrumbs = [...urlCrumbs, ...extraCrumbs.map((c) => ({ label: c.label, href: c.href ?? '' }))]
 
   return (

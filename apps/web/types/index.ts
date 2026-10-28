@@ -623,6 +623,12 @@ export interface Folder {
   item_count: number
 }
 
+/** Assets per status id in a folder and every folder below it (`GET
+ *  /projects/{id}/assets/status-counts`); statuses with none are absent. */
+export interface StatusCounts {
+  counts: Record<string, number>
+}
+
 export interface FolderTreeNode {
   id: string
   name: string

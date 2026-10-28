@@ -67,6 +67,11 @@ class AssetUpdate(BaseModel):
     due_date: Optional[datetime] = None
     keywords: Optional[list] = None
 
+class StatusCountsResponse(BaseModel):
+    """Assets per status id in a folder subtree; statuses with none are absent."""
+    counts: dict[uuid.UUID, int]
+
+
 class StreamUrlResponse(BaseModel):
     url: str
     asset_type: AssetType
