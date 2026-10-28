@@ -23,7 +23,6 @@ import {
 } from "lucide-react";
 import { cn, formatRelativeTime, formatBytes } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
-import { withBasePath } from "@/lib/base-path";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/shared/avatar";
 import { AssetGrid } from "@/components/projects/asset-grid";
@@ -89,9 +88,6 @@ export default function ProjectDetailPage() {
   );
   const { rightPanelOpen } = useViewStore();
 
-  const [currentFolderId, setCurrentFolderId] = React.useState<string | null>(
-    searchParams.get("folder") || null,
-  );
   const [showTrash, setShowTrash] = React.useState(false);
   const [showShareLinks, setShowShareLinks] = React.useState(false);
   // The sidebar's Statuses filter: one status id, or everything. Kept in the
@@ -112,6 +108,24 @@ export default function ProjectDetailPage() {
   const [selectedShareLink, setSelectedShareLink] = React.useState<
     string | null
   >(null);
+
+  // The URL is the one source of truth for the folder: the tree, the
+  // breadcrumb, the browser's back and forward and a pasted link all change
+  // it, and the view follows. The trash and share-link views sit on top of
+  // it and show no folder while they are open.
+  const urlFolderId = searchParams.get("folder") || null;
+  const currentFolderId = showTrash || showShareLinks ? null : urlFolderId;
+
+  // A folder change in the URL (a breadcrumb, back or forward) leaves those
+  // views: the user asked for a folder. Done during render, which React
+  // recommends over an effect for state that follows a value.
+  const [seenFolderId, setSeenFolderId] = React.useState(urlFolderId);
+  if (urlFolderId !== seenFolderId) {
+    setSeenFolderId(urlFolderId);
+    setShowTrash(false);
+    setShowShareLinks(false);
+    setSelectedShareLink(null);
+  }
   const [folderDialogOpen, setFolderDialogOpen] = React.useState(false);
   const [folderDialogParentId, setFolderDialogParentId] = React.useState<
     string | null
@@ -556,16 +570,18 @@ export default function ProjectDetailPage() {
 
   const handleSelectFolder = React.useCallback(
     (folderId: string | null) => {
-      setCurrentFolderId(folderId);
       setShowTrash(false);
       setShowShareLinks(false);
       setSelectedShareLink(null);
       const url = folderId
         ? `/projects/${projectId}?folder=${folderId}`
         : `/projects/${projectId}`;
-      window.history.replaceState(null, "", withBasePath(url));
+      // Through the router, not history.replaceState: the router has to know
+      // where we are, or a breadcrumb back to a folder it still believes we
+      // are in is a navigation to "the same place" and changes nothing.
+      router.replace(url, { scroll: false });
     },
-    [projectId],
+    [projectId, router],
   );
 
   return (
@@ -604,7 +620,6 @@ export default function ProjectDetailPage() {
             onSelectFolder={handleSelectFolder}
             onShowTrash={() => {
               setShowTrash(true);
-              setCurrentFolderId(null);
               setShowShareLinks(false);
               setSelectedShareLink(null);
             }}
@@ -693,7 +708,6 @@ export default function ProjectDetailPage() {
                   setShowShareLinks(true);
                   setSelectedShareLink(null);
                   setShowTrash(false);
-                  setCurrentFolderId(null);
                 }}
                 className={cn(
                   "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
@@ -726,7 +740,6 @@ export default function ProjectDetailPage() {
                     setShowShareLinks(true);
                     setSelectedShareLink(link.token);
                     setShowTrash(false);
-                    setCurrentFolderId(null);
                   }}
                 >
                   {link.share_type === "folder" ? (
