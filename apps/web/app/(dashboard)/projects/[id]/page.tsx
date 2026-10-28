@@ -296,9 +296,19 @@ export default function ProjectDetailPage() {
     [mutateAssetList, mutateStatusCounts],
   );
 
-  // Someone else moving an asset shows on its card without a reload.
+  // Someone else moving an asset shows on its card without a reload. A bulk
+  // move sends one event per asset, so a short trailing debounce turns a
+  // burst into one refetch of the list and the counts.
+  const statusRefetchTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => () => { if (statusRefetchTimer.current) clearTimeout(statusRefetchTimer.current); }, []);
   useSSE(showTrash ? null : projectId, {
-    onAssetStatusUpdated: () => { void mutateAssets(); },
+    onAssetStatusUpdated: () => {
+      if (statusRefetchTimer.current) clearTimeout(statusRefetchTimer.current);
+      statusRefetchTimer.current = setTimeout(() => {
+        statusRefetchTimer.current = null;
+        void mutateAssets();
+      }, 250);
+    },
     onDeliveryUpdated: (d) => { void globalMutate(deliveriesKey(d.asset_id)); },
   });
 
@@ -324,6 +334,39 @@ export default function ProjectDetailPage() {
       }
     },
     [applyStatus, toast, confirmStatusChange, statusFor],
+  );
+
+  // Several selected assets at once: one confirmation, one request, and the
+  // people the status notifies are told once.
+  const handleBulkSetStatus = React.useCallback(
+    async (assetIds: string[], status: AssetStatusDef) => {
+      const byId = new Map((assets ?? []).map((a) => [a.id, a]));
+      const changing = Array.from(new Set(assetIds)).filter((id) => {
+        const a = byId.get(id);
+        return !a || statusFor(a)?.id !== status.id;
+      });
+      if (changing.length === 0) {
+        toast.info(`Already in ${status.name}`);
+        return;
+      }
+      const only = changing.length === 1 ? byId.get(changing[0]) : undefined;
+      const ok = only
+        ? await confirmStatusChange(only.name, statusFor(only), status)
+        : await confirmStatusChange({ count: changing.length }, null, status);
+      if (!ok) return;
+      try {
+        await api.put<AssetResponse[]>("/assets/status", { asset_ids: changing, status_id: status.id });
+        const moved = new Set(changing);
+        await mutateAssets(
+          (current) => current?.map((a) => (moved.has(a.id) ? { ...a, status_id: status.id } : a)),
+          { revalidate: false },
+        );
+        toast.success(`${changing.length} asset${changing.length === 1 ? "" : "s"} moved to ${status.name}`);
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Could not change the status");
+      }
+    },
+    [assets, statusFor, confirmStatusChange, mutateAssets, toast],
   );
 
   // Subfolders for current view
@@ -998,6 +1041,7 @@ export default function ProjectDetailPage() {
               statusFilter={statusFilter}
               folderPaths={statusFilter ? folderPaths : undefined}
               onAssetSetStatus={canSetStatus ? handleSetStatus : undefined}
+              onBulkSetStatus={canSetStatus ? handleBulkSetStatus : undefined}
               onAssetSendToDrive={canDeliver ? (a) => setAssetToDeliver(a as AssetResponse) : undefined}
               selectionShortcuts
               onDeselectAll={() => setSelectedAsset(null)}
@@ -1087,28 +1131,34 @@ export default function ProjectDetailPage() {
                 // members too: originals when an admin allows them outside a
                 // project, transcodes otherwise -- the same rule as Download
                 // All on a share link.
-                async function downloadOne(id: string) {
-                  try {
-                    await downloadAsset(id, undefined, true);
-                    await new Promise((r) => setTimeout(r, 300));
-                  } catch {}
-                }
-
-                // Download selected assets
-                for (const id of assetIds) {
-                  await downloadOne(id);
-                }
-
-                // Download assets from selected folders
+                // One file at a time, each once: an asset selected on its own
+                // and again inside a selected folder is not fetched twice.
+                const ids = new Set(assetIds);
+                let unreadFolders = 0;
                 for (const folderId of folderIds) {
                   try {
                     const folderAssets = await api.get<AssetResponse[]>(
-                      `/projects/${projectId}/assets?folder_id=${folderId}&skip=0&limit=100`,
+                      `/projects/${projectId}/assets?folder_id=${folderId}&include_subfolders=true`,
                     );
-                    for (const fa of folderAssets) {
-                      await downloadOne(fa.id);
-                    }
-                  } catch {}
+                    for (const fa of folderAssets) ids.add(fa.id);
+                  } catch {
+                    unreadFolders += 1;
+                  }
+                }
+                let failed = 0;
+                for (const id of ids) {
+                  try {
+                    await downloadAsset(id, undefined, true);
+                  } catch {
+                    failed += 1;
+                  }
+                  await new Promise((r) => setTimeout(r, 300));
+                }
+                if (failed > 0) {
+                  toast.error(`${failed} of ${ids.size} file${ids.size === 1 ? "" : "s"} could not be downloaded`);
+                }
+                if (unreadFolders > 0) {
+                  toast.error(`${unreadFolders} folder${unreadFolders === 1 ? "" : "s"} could not be read`);
                 }
               }}
               actions={
@@ -1560,13 +1610,28 @@ export default function ProjectDetailPage() {
         variant="danger"
         onConfirm={async () => {
           if (!pendingBulkDelete) return;
-          for (const id of pendingBulkDelete.folderIds) await deleteFolder(id);
-          for (const id of pendingBulkDelete.assetIds)
-            await api.delete(`/assets/${id}`);
+          // Carry on past a failure: what could be deleted is, and the rest
+          // is named.
+          const failed: string[] = [];
+          for (const id of pendingBulkDelete.folderIds) {
+            try {
+              await deleteFolder(id);
+            } catch {
+              failed.push(subfolders?.find((f) => f.id === id)?.name ?? "a folder");
+            }
+          }
+          for (const id of pendingBulkDelete.assetIds) {
+            try {
+              await api.delete(`/assets/${id}`);
+            } catch {
+              failed.push(assets?.find((a) => a.id === id)?.name ?? "an asset");
+            }
+          }
           mutateAssets();
           mutateSubfolders();
           mutateTree();
           setPendingBulkDelete(null);
+          if (failed.length > 0) toast.error(`Could not delete: ${failed.join(", ")}`);
         }}
       />
 

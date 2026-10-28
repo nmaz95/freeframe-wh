@@ -16,7 +16,7 @@ import { formatRelativeTime } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/empty-state'
 import { cn } from '@/lib/utils'
-import { statusChangePayload, deliveryPayload } from '@/types'
+import { statusChangePayload, isBulkStatusChange, deliveryPayload } from '@/types'
 import type { Notification, NotificationType } from '@/types'
 
 const notificationIcons: Record<NotificationType, React.ElementType> = {
@@ -77,7 +77,9 @@ function NotificationItem({ notification }: { notification: Notification }) {
       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
         <p className="text-sm text-text-primary">
           {statusChangePayload(notification)
-            ? `${notification.actor_name ?? 'Someone'} moved ${notification.asset_name ?? 'an asset'} to ${statusChangePayload(notification)!.status_name}`
+            ? isBulkStatusChange(statusChangePayload(notification))
+              ? `${notification.actor_name ?? 'Someone'} moved ${statusChangePayload(notification)!.asset_count} assets to ${statusChangePayload(notification)!.status_name}`
+              : `${notification.actor_name ?? 'Someone'} moved ${notification.asset_name ?? 'an asset'} to ${statusChangePayload(notification)!.status_name}`
             : deliveryPayload(notification)
               ? deliveryPayload(notification)!.status === 'failed'
                 ? `Delivery of ${notification.asset_name ?? 'an asset'} failed`

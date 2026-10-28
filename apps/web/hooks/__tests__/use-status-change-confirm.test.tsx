@@ -13,6 +13,7 @@ function Page({ onAnswer }: { onAnswer: (ok: boolean) => void }) {
   return (
     <div>
       <button onClick={async () => onAnswer(await confirmStatusChange('Spot 30s', noStatus, pmReview))}>change</button>
+      <button onClick={async () => onAnswer(await confirmStatusChange({ count: 12 }, null, pmReview))}>change many</button>
       {statusConfirmDialog}
     </div>
   )
@@ -54,6 +55,26 @@ describe('useStatusChangeConfirm', () => {
 
     await act(async () => { fireEvent.click(screen.getByText('change')) })
     await waitFor(() => expect(answers).toEqual([true, true]))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('asks once for several assets, by count', async () => {
+    const answers: boolean[] = []
+    render(<Page onAnswer={(ok) => answers.push(ok)} />)
+    fireEvent.click(screen.getByText('change many'))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('Move 12 assets to Needs PM Review?')
+    expect(dialog).toHaveTextContent('12 assets go to Needs PM Review. The people this status notifies will be told once.')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(answers).toEqual([false]))
+  })
+
+  it("the session's 'Don't ask again' covers bulk moves too", async () => {
+    sessionStorage.setItem(SKIP_STATUS_CONFIRM_KEY, '1')
+    const answers: boolean[] = []
+    render(<Page onAnswer={(ok) => answers.push(ok)} />)
+    await act(async () => { fireEvent.click(screen.getByText('change many')) })
+    await waitFor(() => expect(answers).toEqual([true]))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

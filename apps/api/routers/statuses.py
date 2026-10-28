@@ -21,7 +21,7 @@ from ..models.user import User
 from ..routers.users import require_admin
 from ..schemas.asset import AssetResponse
 from ..schemas.pipeline import (
-    AssetStatusChange, PipelineRoleCreate, PipelineRoleResponse, PipelineRoleUpdate,
+    AssetStatusChange, AssetsStatusChange, PipelineRoleCreate, PipelineRoleResponse, PipelineRoleUpdate,
     RoleAssignmentEntry, RoleAssignmentsPut, RoleAssignmentsResponse,
     StatusCreate, StatusReorder, StatusResponse, StatusUpdate,
 )
@@ -29,9 +29,9 @@ from ..services.permissions import (
     require_asset_access, require_live_project, require_project_role, require_project_visible,
 )
 from ..services.status_notifications import (
-    change_asset_status, get_default_status, get_live_status, live_statuses,
+    change_asset_status, change_assets_status, get_default_status, get_live_status, live_statuses,
 )
-from .assets import _build_asset_response
+from .assets import _build_asset_response, _build_asset_responses_bulk
 
 router = APIRouter(tags=["statuses"])
 
@@ -341,6 +341,34 @@ def put_asset_assignments(
 
 
 # ─── Moving an asset ──────────────────────────────────────────────────────────
+
+# Declared before `/assets/{asset_id}/status`, and safe next to it: no
+# `PUT /assets/{asset_id}` exists, and routing only takes a full path-and-method
+# match, so "status" is never read as an asset id. Keep it that way: a
+# `PUT /assets/{asset_id}` added later must be declared after this one.
+@router.put("/assets/status", response_model=list[AssetResponse])
+def set_assets_status(
+    body: AssetsStatusChange,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """Move several assets of one project to a status at once. Refused whole
+    when any id is unknown or trashed (404) or the assets span projects
+    (400); assets already in the status are left alone. Answers with every
+    asset, in the order asked."""
+    ids = list(dict.fromkeys(body.asset_ids))
+    assets = db.query(Asset).filter(Asset.id.in_(ids), Asset.deleted_at.is_(None)).all()
+    by_id = {a.id: a for a in assets}
+    if len(by_id) != len(ids):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    projects = {a.project_id for a in assets}
+    if len(projects) != 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assets must belong to one project")
+    require_project_role(db, projects.pop(), current_user, ProjectRole.reviewer)
+    new_status = _status_or_404(db, body.status_id)
+    ordered = [by_id[i] for i in ids]
+    change_assets_status(db, ordered, new_status, current_user)
+    return _build_asset_responses_bulk(ordered, db)
+
 
 @router.put("/assets/{asset_id}/status", response_model=AssetResponse)
 def set_asset_status(

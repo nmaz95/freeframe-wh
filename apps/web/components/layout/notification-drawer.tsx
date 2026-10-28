@@ -17,7 +17,7 @@ import { withBasePath } from '@/lib/base-path'
 import { useNotificationStore } from '@/stores/notification-store'
 import { formatRelativeTime } from '@/lib/utils'
 import { cn } from '@/lib/utils'
-import { statusChangePayload, deliveryPayload } from '@/types'
+import { statusChangePayload, isBulkStatusChange, deliveryPayload } from '@/types'
 import type { Notification, NotificationType } from '@/types'
 
 const notificationIcons: Record<NotificationType, React.ElementType> = {
@@ -47,6 +47,12 @@ function getNotificationText(n: Notification): { title: string; subtitle: string
     case 'status_change': {
       const p = statusChangePayload(n)
       const to = p?.status_name ?? 'a new status'
+      if (p && isBulkStatusChange(p)) {
+        const names = p.asset_names ?? []
+        const more = (p.asset_count ?? 0) - names.length
+        const subtitle = names.length ? names.join(', ') + (more > 0 ? `, and ${more} more` : '') : null
+        return { title: `${actor} moved ${p.asset_count} assets to ${to}`, subtitle }
+      }
       const from = p?.from_status_name
       return { title: `${actor} moved ${asset} to ${to}`, subtitle: from ? `was ${from}` : null }
     }
@@ -73,6 +79,13 @@ function NotificationItem({ notification, onClose }: { notification: Notificatio
     const delivery = deliveryPayload(notification)
     if (delivery?.status === 'done' && delivery.web_view_link) {
       window.open(delivery.web_view_link, '_blank', 'noopener')
+      onClose()
+      return
+    }
+    // A grouped status change opens the project filtered on that status.
+    const bulk = statusChangePayload(notification)
+    if (bulk && isBulkStatusChange(bulk) && notification.project_id) {
+      window.location.href = withBasePath(`/projects/${notification.project_id}?status=${bulk.status_id}`)
       onClose()
       return
     }

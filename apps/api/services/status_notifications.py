@@ -18,11 +18,12 @@ from ..config import settings
 from ..models.activity import ActivityAction, ActivityLog, Notification, NotificationType
 from ..models.asset import Asset, AssetStatus
 from ..models.pipeline import AssetStatusDef, AssetStatusNotifyRole, PipelineRole, PipelineRoleAssignment
+from ..models.project import ProjectMember
 from ..models.user import User, UserStatus
 from ..services import event_service
 from ..services.permissions import can_access_asset
 from ..tasks.celery_app import send_task_safe
-from ..tasks.email_tasks import send_status_change_email
+from ..tasks.email_tasks import send_bulk_status_change_email, send_status_change_email
 
 # The event the project stream carries when an asset's status changes.
 STATUS_EVENT = "asset_status_updated"
@@ -204,36 +205,99 @@ def reset_asset_status_for_new_version(db: Session, asset: Asset, actor: User) -
     if default is None or asset.status_id == default.id:
         return False
     previous = get_live_status(db, asset.status_id) if asset.status_id else None
-    asset.status_id = default.id
-    if default.legacy_key:
-        try:
-            asset.status = AssetStatus(default.legacy_key)
-        except ValueError:
-            pass
-    db.add(ActivityLog(
-        user_id=actor.id,
-        project_id=asset.project_id,
-        asset_id=asset.id,
-        action=ActivityAction.status_changed,
-        payload={
-            "from_status_id": str(previous.id) if previous else None,
-            "from_status_name": previous.name if previous else None,
-            "to_status_id": str(default.id),
-            "to_status_name": default.name,
-            "reason": "new_version",
-        },
-    ))
+    _apply_status(db, asset, default, actor, previous, reason="new_version")
     db.commit()
-    event_service.publish_sync(asset.project_id, STATUS_EVENT, {
-        "asset_id": str(asset.id),
-        "status_id": str(default.id),
-        "user_id": str(actor.id),
-    })
+    _publish(asset, default, actor)
     return True
 
 
 def asset_link(asset: Asset) -> str:
     return f"{settings.frontend_url}/projects/{asset.project_id}/assets/{asset.id}"
+
+
+def project_status_link(project_id: uuid.UUID, status_id: uuid.UUID) -> str:
+    """The project page filtered on a status: where a grouped notification points."""
+    return f"{settings.frontend_url}/projects/{project_id}?status={status_id}"
+
+
+# ─── The pieces a single and a bulk move share ────────────────────────────────
+
+def _mirror_legacy(asset: Asset, status: AssetStatusDef) -> None:
+    if status.legacy_key:
+        try:
+            asset.status = AssetStatus(status.legacy_key)
+        except ValueError:
+            pass  # a key the enum does not know: leave the legacy column alone
+
+
+def _apply_status(
+    db: Session, asset: Asset, new_status: AssetStatusDef, actor: User,
+    previous: AssetStatusDef | None, *, reason: str | None = None,
+) -> None:
+    """Write the move and its activity row; no commit, no one told."""
+    asset.status_id = new_status.id
+    _mirror_legacy(asset, new_status)
+    payload = {
+        "from_status_id": str(previous.id) if previous else None,
+        "from_status_name": previous.name if previous else None,
+        "to_status_id": str(new_status.id),
+        "to_status_name": new_status.name,
+    }
+    if reason:
+        payload["reason"] = reason
+    db.add(ActivityLog(
+        user_id=actor.id,
+        project_id=asset.project_id,
+        asset_id=asset.id,
+        action=ActivityAction.status_changed,
+        payload=payload,
+    ))
+
+
+def _candidate_ids(asset: Asset, holders: Mapping[uuid.UUID, Collection[uuid.UUID]], actor_id: uuid.UUID) -> set[uuid.UUID]:
+    ids = {asset.created_by, asset.assignee_id} | {u for users in holders.values() for u in users}
+    ids.discard(None)
+    ids.discard(actor_id)
+    return ids
+
+
+def _load_users(db: Session, ids: Collection[uuid.UUID]) -> dict[uuid.UUID, User]:
+    if not ids:
+        return {}
+    return {u.id: u for u in db.query(User).filter(User.id.in_(list(ids)), User.deleted_at.is_(None)).all()}
+
+
+def _recipients_for(
+    db: Session, asset: Asset, rule: StatusRule, actor: User,
+    holders: Mapping[uuid.UUID, Collection[uuid.UUID]], users: Mapping[uuid.UUID, User],
+    can_access: Callable[[uuid.UUID], bool] | None = None,
+) -> list[Recipient]:
+    return resolve_status_recipients(
+        rule,
+        creator_id=asset.created_by,
+        assignee_id=asset.assignee_id,
+        actor_id=actor.id,
+        role_holders=holders,
+        can_access=can_access or (lambda uid: uid in users and can_access_asset(db, asset, users[uid])),
+        preferences={uid: u.preferences for uid, u in users.items()},
+    )
+
+
+def _status_payload(new_status: AssetStatusDef, from_name: str | None) -> dict:
+    return {
+        "status_id": str(new_status.id),
+        "status_name": new_status.name,
+        "status_color": new_status.color,
+        "from_status_name": from_name,
+    }
+
+
+def _publish(asset: Asset, new_status: AssetStatusDef, actor: User) -> bool:
+    return event_service.publish_sync(asset.project_id, STATUS_EVENT, {
+        "asset_id": str(asset.id),
+        "status_id": str(new_status.id),
+        "user_id": str(actor.id),
+    })
 
 
 def change_asset_status(db: Session, asset: Asset, new_status: AssetStatusDef, actor: User) -> bool:
@@ -250,55 +314,14 @@ def change_asset_status(db: Session, asset: Asset, new_status: AssetStatusDef, a
 
     previous = get_live_status(db, asset.status_id) if asset.status_id else None
     from_name = previous.name if previous else None
-
-    asset.status_id = new_status.id
-    if new_status.legacy_key:
-        try:
-            asset.status = AssetStatus(new_status.legacy_key)
-        except ValueError:
-            pass  # a key the enum does not know: leave the legacy column alone
-
-    db.add(ActivityLog(
-        user_id=actor.id,
-        project_id=asset.project_id,
-        asset_id=asset.id,
-        action=ActivityAction.status_changed,
-        payload={
-            "from_status_id": str(previous.id) if previous else None,
-            "from_status_name": from_name,
-            "to_status_id": str(new_status.id),
-            "to_status_name": new_status.name,
-        },
-    ))
+    _apply_status(db, asset, new_status, actor, previous)
 
     rule = status_rule(db, new_status)
     holders = load_role_holders(db, asset, rule.role_ids)
-    candidate_ids = {asset.created_by, asset.assignee_id} | {u for users in holders.values() for u in users}
-    candidate_ids.discard(None)
-    candidate_ids.discard(actor.id)
-    users = {
-        u.id: u
-        for u in (
-            db.query(User).filter(User.id.in_(list(candidate_ids)), User.deleted_at.is_(None)).all()
-            if candidate_ids else []
-        )
-    }
-    recipients = resolve_status_recipients(
-        rule,
-        creator_id=asset.created_by,
-        assignee_id=asset.assignee_id,
-        actor_id=actor.id,
-        role_holders=holders,
-        can_access=lambda uid: uid in users and can_access_asset(db, asset, users[uid]),
-        preferences={uid: u.preferences for uid, u in users.items()},
-    )
+    users = _load_users(db, _candidate_ids(asset, holders, actor.id))
+    recipients = _recipients_for(db, asset, rule, actor, holders, users)
 
-    payload = {
-        "status_id": str(new_status.id),
-        "status_name": new_status.name,
-        "status_color": new_status.color,
-        "from_status_name": from_name,
-    }
+    payload = _status_payload(new_status, from_name)
     for recipient in recipients:
         if recipient.in_app:
             db.add(Notification(
@@ -323,9 +346,114 @@ def change_asset_status(db: Session, asset: Asset, new_status: AssetStatusDef, a
                 from_status_name=from_name,
                 asset_link=link,
             )
-    event_service.publish_sync(asset.project_id, STATUS_EVENT, {
-        "asset_id": str(asset.id),
-        "status_id": str(new_status.id),
-        "user_id": str(actor.id),
-    })
+    _publish(asset, new_status, actor)
     return True
+
+
+# How many asset names a grouped notification and email carry; the rest is "and N more".
+BULK_NAMES_SHOWN = 5
+
+
+def change_assets_status(db: Session, assets: list[Asset], new_status: AssetStatusDef, actor: User) -> list[Asset]:
+    """Move several assets of one project to `new_status` in one commit, on
+    behalf of `actor`. Returns the assets that moved; those already there are
+    left alone, and when none moves nothing is written, sent or published.
+
+    Each person the status names hears once: one in-app notification and one
+    email naming all of their assets (someone concerned with a single one of
+    them gets the ordinary single-asset message), and the live event goes out
+    once per asset, as the single move sends it.
+    """
+    moving = [a for a in assets if a.status_id != new_status.id]
+    if not moving:
+        return []
+    project_id = moving[0].project_id
+
+    previous_ids = {a.status_id for a in moving if a.status_id}
+    previous_by_id: dict[uuid.UUID, AssetStatusDef] = {}
+    if previous_ids:
+        previous_by_id = {
+            s.id: s for s in db.query(AssetStatusDef).filter(
+                AssetStatusDef.id.in_(list(previous_ids)), AssetStatusDef.deleted_at.is_(None),
+            ).all()
+        }
+    from_name_of: dict[uuid.UUID, str | None] = {}
+    for a in moving:
+        previous = previous_by_id.get(a.status_id) if a.status_id else None
+        from_name_of[a.id] = previous.name if previous else None
+        _apply_status(db, a, new_status, actor, previous)
+
+    rule = status_rule(db, new_status)
+    holders_of = {a.id: load_role_holders(db, a, rule.role_ids) for a in moving}
+    candidates: set[uuid.UUID] = set()
+    for a in moving:
+        candidates |= _candidate_ids(a, holders_of[a.id], actor.id)
+    users = _load_users(db, candidates)
+    # A member reaches every asset of the project, so one membership query
+    # answers most access checks; the rest fall back to the full check.
+    member_ids = {
+        r[0] for r in db.query(ProjectMember.user_id).filter(
+            ProjectMember.project_id == project_id, ProjectMember.deleted_at.is_(None),
+        ).all()
+    } if users else set()
+
+    per_user: dict[uuid.UUID, list[Asset]] = {}
+    channels: dict[uuid.UUID, Recipient] = {}
+    for a in moving:
+        can_access = lambda uid, a=a: uid in users and (uid in member_ids or can_access_asset(db, a, users[uid]))
+        for r in _recipients_for(db, a, rule, actor, holders_of[a.id], users, can_access):
+            per_user.setdefault(r.user_id, []).append(a)
+            channels.setdefault(r.user_id, r)
+
+    for user_id, theirs in per_user.items():
+        if not channels[user_id].in_app:
+            continue
+        if len(theirs) == 1:
+            payload = _status_payload(new_status, from_name_of[theirs[0].id])
+        else:
+            payload = {
+                **_status_payload(new_status, None),
+                "asset_count": len(theirs),
+                "asset_ids": [str(a.id) for a in theirs],
+                "asset_names": [a.name for a in theirs[:BULK_NAMES_SHOWN]],
+                "project_id": str(project_id),
+            }
+        db.add(Notification(
+            user_id=user_id,
+            type=NotificationType.status_change,
+            asset_id=theirs[0].id,
+            actor_id=actor.id,
+            payload=payload,
+        ))
+    db.commit()
+
+    for user_id, theirs in per_user.items():
+        if not channels[user_id].email:
+            continue
+        if len(theirs) == 1:
+            one = theirs[0]
+            send_task_safe(
+                send_status_change_email,
+                to_email=users[user_id].email,
+                actor_name=actor.name,
+                asset_name=one.name,
+                status_name=new_status.name,
+                status_color=new_status.color,
+                from_status_name=from_name_of[one.id],
+                asset_link=asset_link(one),
+            )
+        else:
+            send_task_safe(
+                send_bulk_status_change_email,
+                to_email=users[user_id].email,
+                actor_name=actor.name,
+                asset_count=len(theirs),
+                asset_names=[a.name for a in theirs[:BULK_NAMES_SHOWN]],
+                status_name=new_status.name,
+                status_color=new_status.color,
+                project_link=project_status_link(project_id, new_status.id),
+            )
+    for a in moving:
+        if not _publish(a, new_status, actor):
+            break  # the broker is down: the rest would fail the same way
+    return moving

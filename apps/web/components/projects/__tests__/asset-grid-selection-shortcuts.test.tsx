@@ -245,6 +245,17 @@ describe.each(['grid', 'list'] as const)('AssetGrid selection shortcuts (%s view
     expect(selectedCount()).toBe(6)
   })
 
+  it('"Select all" on the bar selects every clip and folder shown, then goes away', () => {
+    render(<AssetGrid assets={assets} projectId="p1" folders={[folder]} selectionShortcuts />)
+    expect(screen.queryByRole('button', { name: 'Select all' })).toBeNull()
+
+    fireEvent.click(clip(1), { metaKey: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
+
+    expect(selectedCount()).toBe(6)
+    expect(screen.queryByRole('button', { name: 'Select all' })).toBeNull()
+  })
+
   it('⌘-A in a text field selects the text, not the clips', () => {
     render(
       <>
@@ -332,5 +343,27 @@ describe.each(['grid', 'list'] as const)('AssetGrid selection shortcuts (%s view
 
     expect(selectedCount()).toBe(0)
     expect(onAssetSelect).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('AssetGrid list header checkbox', () => {
+  beforeEach(() => {
+    mockViewState.layout = 'list'
+  })
+
+  it('selects everything, shows a partial selection as mixed, and clears', () => {
+    render(<AssetGrid assets={assets} projectId="p1" folders={[folder]} selectionShortcuts />)
+    const all = screen.getByRole('checkbox', { name: 'Select all' })
+    expect(all).toHaveAttribute('aria-checked', 'false')
+
+    fireEvent.click(clip(2), { metaKey: true })
+    expect(all).toHaveAttribute('aria-checked', 'mixed')
+
+    fireEvent.click(all)
+    expect(selectedCount()).toBe(6)
+    expect(all).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(all)
+    expect(selectedCount()).toBe(0)
   })
 })

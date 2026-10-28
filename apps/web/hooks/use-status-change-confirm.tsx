@@ -25,28 +25,35 @@ function rememberSkip() {
 }
 
 interface Pending {
-  assetName: string
+  /** One asset by name, or several by count. */
+  assetName?: string
+  count?: number
   from: AssetStatusDef | null
   to: AssetStatusDef
   resolve: (ok: boolean) => void
 }
 
+/** What is being moved: an asset's name, or how many of them. */
+export type StatusChangeSubject = string | { count: number }
+
 /**
  * A confirmation before an asset's status changes, since the change tells
  * people. `confirmStatusChange` resolves true to go ahead; mount
  * `statusConfirmDialog` once on the page. Ticking "Don't ask again" skips the
- * dialog for the rest of the browser session.
+ * dialog for the rest of the browser session, for single and bulk moves
+ * alike: it is one question, "are you sure you want to tell people".
  */
 export function useStatusChangeConfirm() {
   const [pending, setPending] = React.useState<Pending | null>(null)
   const [skip, setSkip] = React.useState(false)
 
   const confirmStatusChange = React.useCallback(
-    (assetName: string, from: AssetStatusDef | null, to: AssetStatusDef): Promise<boolean> => {
+    (subject: StatusChangeSubject, from: AssetStatusDef | null, to: AssetStatusDef): Promise<boolean> => {
       if (skipWanted()) return Promise.resolve(true)
       return new Promise((resolve) => {
         setSkip(false)
-        setPending({ assetName, from, to, resolve })
+        if (typeof subject === 'string') setPending({ assetName: subject, from, to, resolve })
+        else setPending({ count: subject.count, from, to, resolve })
       })
     },
     [],
@@ -61,10 +68,12 @@ export function useStatusChangeConfirm() {
     <ConfirmDialog
       open={pending !== null}
       onOpenChange={(open) => { if (!open) close(false) }}
-      title={pending ? `Move to ${pending.to.name}?` : ''}
+      title={pending ? (pending.count ? `Move ${pending.count} assets to ${pending.to.name}?` : `Move to ${pending.to.name}?`) : ''}
       description={
         pending
-          ? `“${pending.assetName}” goes${pending.from ? ` from ${pending.from.name}` : ''} to ${pending.to.name}. The people this status notifies will be told.`
+          ? pending.count
+            ? `${pending.count} assets go to ${pending.to.name}. The people this status notifies will be told once.`
+            : `“${pending.assetName}” goes${pending.from ? ` from ${pending.from.name}` : ''} to ${pending.to.name}. The people this status notifies will be told.`
           : undefined
       }
       confirmLabel="Change status"

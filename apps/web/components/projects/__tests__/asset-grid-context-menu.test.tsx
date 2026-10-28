@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AssetGrid } from '../asset-grid'
-import type { Asset, DownloadOption, Folder } from '@/types'
+import type { Asset, AssetStatusDef, DownloadOption, Folder } from '@/types'
 
 // Right-click on an asset or a folder opens the same menu as its ⋯ button. On
 // an item that is one of several selected, it acts on the whole selection.
@@ -50,6 +50,10 @@ const assets = [1, 2, 3].map(makeAsset)
 const folders = [
   { id: 'f1', project_id: 'p1', parent_id: null, name: 'Selects', item_count: 0, created_at: '2026-01-01T00:00:00Z' },
 ] as unknown as Folder[]
+
+const noStatus = { id: 's0', name: 'No Status', color: '#8b8fa3', position: 0, is_default: true } as AssetStatusDef
+const approved = { id: 's1', name: 'Approved', color: '#22c55e', position: 1, is_default: false } as AssetStatusDef
+const statuses = [noStatus, approved]
 
 const ASSET_ITEMS = ['Create Share Link', 'Download', 'Copy Asset URL', 'Rename', 'Delete']
 const FOLDER_ITEMS = ['Create Share Link', 'New Subfolder', 'Rename', 'Delete']
@@ -222,6 +226,33 @@ describe.each(['grid', 'list'] as const)('AssetGrid right-click (%s view)', (lay
     await user().click(screen.getByRole('menuitem', { name: 'Delete' }))
     expect(h.onBulkDelete).toHaveBeenCalledWith(['a1', 'a3'], ['f1'])
     expect(h.onAssetDelete).not.toHaveBeenCalled()
+  })
+
+  it('offers Change status for the selected assets, folders left out', async () => {
+    const onBulkSetStatus = vi.fn()
+    renderGrid({ statuses, onBulkSetStatus })
+    fireEvent.click(screen.getByText('Clip 1'), { metaKey: true })
+    fireEvent.click(screen.getByText('Clip 3'), { metaKey: true })
+    fireEvent.click(screen.getByText('Selects'), { metaKey: true })
+
+    fireEvent.contextMenu(screen.getByText('Clip 3'))
+    await screen.findByText('3 items selected')
+    expect(await menuItems()).toEqual(['Change status', 'Create Share Link', 'Download', 'Move to…', 'Delete'])
+    await user().click(screen.getByRole('menuitem', { name: 'Change status' }))
+    await user().click(await screen.findByRole('menuitemradio', { name: 'Approved' }))
+    await waitFor(() => expect(onBulkSetStatus).toHaveBeenCalledWith(['a1', 'a3'], approved))
+  })
+
+  it('the bar has Change status too, and only once an asset is selected', async () => {
+    const onBulkSetStatus = vi.fn()
+    renderGrid({ statuses, onBulkSetStatus })
+    fireEvent.click(screen.getByText('Selects'), { metaKey: true })
+    expect(screen.queryByRole('button', { name: /Change status/ })).toBeNull()
+
+    fireEvent.click(screen.getByText('Clip 2'), { metaKey: true })
+    await user().click(screen.getByRole('button', { name: /Change status/ }))
+    await user().click(await screen.findByRole('menuitemradio', { name: 'Approved' }))
+    await waitFor(() => expect(onBulkSetStatus).toHaveBeenCalledWith(['a2'], approved))
   })
 
   it('a selected folder gets the selection menu too', async () => {
