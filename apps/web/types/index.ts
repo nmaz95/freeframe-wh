@@ -499,6 +499,13 @@ export interface GooglePickerConfig {
   root_folder_name: string | null;
 }
 
+/** A folder made (or renamed) through FreeFrame, as Drive describes it. */
+export interface DriveFolder {
+  id: string;
+  name: string;
+  web_view_link: string | null;
+}
+
 export type DeliveryStatus = "queued" | "uploading" | "done" | "failed";
 
 export interface DriveDelivery {

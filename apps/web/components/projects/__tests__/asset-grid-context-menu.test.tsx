@@ -255,6 +255,31 @@ describe.each(['grid', 'list'] as const)('AssetGrid right-click (%s view)', (lay
     await waitFor(() => expect(onBulkSetStatus).toHaveBeenCalledWith(['a2'], approved))
   })
 
+  it('offers Send to Google Drive for the selected assets, folders left out', async () => {
+    const onBulkSendToDrive = vi.fn()
+    renderGrid({ onBulkSendToDrive })
+    fireEvent.click(screen.getByText('Clip 1'), { metaKey: true })
+    fireEvent.click(screen.getByText('Clip 3'), { metaKey: true })
+    fireEvent.click(screen.getByText('Selects'), { metaKey: true })
+
+    fireEvent.contextMenu(screen.getByText('Clip 3'))
+    await screen.findByText('3 items selected')
+    expect(await menuItems()).toEqual(['Create Share Link', 'Download', 'Send to Google Drive…', 'Move to…', 'Delete'])
+    await user().click(screen.getByRole('menuitem', { name: 'Send to Google Drive…' }))
+    await waitFor(() => expect(onBulkSendToDrive).toHaveBeenCalledWith(['a1', 'a3']))
+  })
+
+  it('the bar has Send to Drive too, and only once an asset is selected', async () => {
+    const onBulkSendToDrive = vi.fn()
+    renderGrid({ onBulkSendToDrive })
+    fireEvent.click(screen.getByText('Selects'), { metaKey: true })
+    expect(screen.queryByRole('button', { name: /Send to Drive/ })).toBeNull()
+
+    fireEvent.click(screen.getByText('Clip 2'), { metaKey: true })
+    fireEvent.click(screen.getByRole('button', { name: /Send to Drive/ }))
+    expect(onBulkSendToDrive).toHaveBeenCalledWith(['a2'])
+  })
+
   it('a selected folder gets the selection menu too', async () => {
     renderGrid()
     fireEvent.click(screen.getByText('Clip 1'), { metaKey: true })

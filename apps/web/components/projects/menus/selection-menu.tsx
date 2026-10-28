@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Download, FolderInput, Share2, Trash2 } from 'lucide-react'
+import { CloudUpload, Download, FolderInput, Share2, Trash2 } from 'lucide-react'
 import { MenuAction, MenuLabel, MenuSeparator } from '@/components/shared/item-menu'
 import { StatusSubmenu } from './status-menu'
 import type { AssetStatusDef } from '@/types'
@@ -15,6 +15,9 @@ export interface SelectionActions {
    *  or the viewer may not change statuses. */
   statuses?: AssetStatusDef[]
   onSetStatus?: (status: AssetStatusDef) => void
+  /** "Send to Google Drive…" for the selected assets (folders are left out);
+   *  absent when none is selected or the viewer may not deliver. */
+  onSendToDrive?: () => void
 }
 
 /**
@@ -22,7 +25,7 @@ export interface SelectionActions {
  * actions, for everything selected rather than the one item under the pointer.
  */
 export function SelectionMenuItems({
-  count, onShare, onDownload, onMove, onDelete, statuses, onSetStatus,
+  count, onShare, onDownload, onMove, onDelete, statuses, onSetStatus, onSendToDrive,
 }: SelectionActions & { count: number }) {
   return (
     <>
@@ -38,6 +41,11 @@ export function SelectionMenuItems({
       {onDownload && (
         <MenuAction icon={Download} onSelect={onDownload}>
           Download
+        </MenuAction>
+      )}
+      {onSendToDrive && (
+        <MenuAction icon={CloudUpload} onSelect={onSendToDrive}>
+          Send to Google Drive…
         </MenuAction>
       )}
       {onMove && (

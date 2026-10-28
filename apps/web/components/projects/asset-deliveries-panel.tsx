@@ -11,6 +11,11 @@ export function deliveriesKey(assetId: string) {
   return `/assets/${assetId}/deliveries`
 }
 
+/** A batch of deliveries of one project by id, for a dialog following several copies. */
+export function projectDeliveriesKey(projectId: string, ids: string[]) {
+  return `/projects/${projectId}/deliveries?ids=${ids.join(',')}`
+}
+
 /** The copies of an asset sent to Google Drive, newest first. */
 export function AssetDeliveriesPanel({
   assetId,

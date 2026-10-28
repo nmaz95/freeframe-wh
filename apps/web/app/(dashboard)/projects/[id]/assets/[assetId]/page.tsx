@@ -637,11 +637,11 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     <div className="absolute inset-0 flex flex-col overflow-hidden">
       {statusConfirmDialog}
       <SendToDriveDialog
-        asset={deliverOpen ? asset : null}
+        assets={deliverOpen && asset ? [asset] : []}
         onOpenChange={setDeliverOpen}
         statuses={statuses}
         statusFor={statusFor}
-        onMoveToStatus={applyStatus}
+        onMoveToStatus={(targets, s) => applyStatus(targets[0], s)}
       />
       {/* ─── Top bar (Frame.io style) ──────────────────────────────────── */}
       <div className="flex items-center justify-between border-b border-border px-3 h-12 bg-bg-secondary shrink-0">

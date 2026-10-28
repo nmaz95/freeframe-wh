@@ -94,8 +94,8 @@ export default function ProjectDetailPage() {
 
   const [showTrash, setShowTrash] = React.useState(false);
   const [showShareLinks, setShowShareLinks] = React.useState(false);
-  // The asset "Send to Google Drive…" was opened for, or null.
-  const [assetToDeliver, setAssetToDeliver] = React.useState<AssetResponse | null>(null);
+  // The assets "Send to Google Drive…" was opened for; empty keeps it closed.
+  const [assetsToDeliver, setAssetsToDeliver] = React.useState<AssetResponse[]>([]);
   const { statuses, statusFor, rankOf } = useAssetStatuses();
   const { confirmStatusChange, statusConfirmDialog } = useStatusChangeConfirm();
   const [selectedShareLink, setSelectedShareLink] = React.useState<
@@ -336,8 +336,21 @@ export default function ProjectDetailPage() {
     [applyStatus, toast, confirmStatusChange, statusFor],
   );
 
-  // Several selected assets at once: one confirmation, one request, and the
-  // people the status notifies are told once.
+  // Several assets in one request; the people the status notifies are told once.
+  const applyStatusToMany = React.useCallback(
+    async (assetIds: string[], status: AssetStatusDef) => {
+      await api.put<AssetResponse[]>("/assets/status", { asset_ids: assetIds, status_id: status.id });
+      const moved = new Set(assetIds);
+      await mutateAssets(
+        (current) => current?.map((a) => (moved.has(a.id) ? { ...a, status_id: status.id } : a)),
+        { revalidate: false },
+      );
+      toast.success(`${assetIds.length} asset${assetIds.length === 1 ? "" : "s"} moved to ${status.name}`);
+    },
+    [mutateAssets, toast],
+  );
+
+  // Several selected assets at once: one confirmation, one request.
   const handleBulkSetStatus = React.useCallback(
     async (assetIds: string[], status: AssetStatusDef) => {
       const byId = new Map((assets ?? []).map((a) => [a.id, a]));
@@ -355,18 +368,20 @@ export default function ProjectDetailPage() {
         : await confirmStatusChange({ count: changing.length }, null, status);
       if (!ok) return;
       try {
-        await api.put<AssetResponse[]>("/assets/status", { asset_ids: changing, status_id: status.id });
-        const moved = new Set(changing);
-        await mutateAssets(
-          (current) => current?.map((a) => (moved.has(a.id) ? { ...a, status_id: status.id } : a)),
-          { revalidate: false },
-        );
-        toast.success(`${changing.length} asset${changing.length === 1 ? "" : "s"} moved to ${status.name}`);
+        await applyStatusToMany(changing, status);
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : "Could not change the status");
       }
     },
-    [assets, statusFor, confirmStatusChange, mutateAssets, toast],
+    [assets, statusFor, confirmStatusChange, applyStatusToMany, toast],
+  );
+
+  // After a Drive delivery: the dialog was the confirmation. One asset keeps
+  // the ordinary single-asset notification; several go in one request.
+  const applyBulkStatus = React.useCallback(
+    (targets: AssetResponse[], status: AssetStatusDef) =>
+      targets.length === 1 ? applyStatus(targets[0], status) : applyStatusToMany(targets.map((t) => t.id), status),
+    [applyStatus, applyStatusToMany],
   );
 
   // Subfolders for current view
@@ -1042,7 +1057,11 @@ export default function ProjectDetailPage() {
               folderPaths={statusFilter ? folderPaths : undefined}
               onAssetSetStatus={canSetStatus ? handleSetStatus : undefined}
               onBulkSetStatus={canSetStatus ? handleBulkSetStatus : undefined}
-              onAssetSendToDrive={canDeliver ? (a) => setAssetToDeliver(a as AssetResponse) : undefined}
+              onAssetSendToDrive={canDeliver ? (a) => setAssetsToDeliver([a as AssetResponse]) : undefined}
+              onBulkSendToDrive={canDeliver ? (ids) => {
+                const byId = new Map((assets ?? []).map((a) => [a.id, a]));
+                setAssetsToDeliver(ids.map((id) => byId.get(id)).filter((a): a is AssetResponse => !!a));
+              } : undefined}
               selectionShortcuts
               onDeselectAll={() => setSelectedAsset(null)}
               // The toolbar's Upload menu, which this opens, is there only
@@ -1482,7 +1501,7 @@ export default function ProjectDetailPage() {
                       <AssetDeliveriesPanel
                         key={selectedAsset.id}
                         assetId={selectedAsset.id}
-                        onSend={canDeliver ? () => setAssetToDeliver(selectedAsset) : undefined}
+                        onSend={canDeliver ? () => setAssetsToDeliver([selectedAsset]) : undefined}
                         compact
                       />
                     </div>
@@ -1593,11 +1612,11 @@ export default function ProjectDetailPage() {
       {/* Bulk delete confirmation */}
       {statusConfirmDialog}
       <SendToDriveDialog
-        asset={assetToDeliver}
-        onOpenChange={(open) => { if (!open) setAssetToDeliver(null); }}
+        assets={assetsToDeliver}
+        onOpenChange={(open) => { if (!open) setAssetsToDeliver([]); }}
         statuses={statuses}
         statusFor={statusFor}
-        onMoveToStatus={applyStatus}
+        onMoveToStatus={applyBulkStatus}
       />
       <ConfirmDialog
         open={pendingBulkDelete !== null}

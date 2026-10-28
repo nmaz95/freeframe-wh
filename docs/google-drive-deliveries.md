@@ -17,6 +17,24 @@ under a shared "Deliveries" folder with one subfolder per client.
   menu, the review page's top bar, or the Fields panel) opens the Google
   Picker on the deliveries folder; pick the client, check the file name
   (`Asset name v3.mov` by default), send. Owners and editors can send.
+- **Several at once:** tick the assets in the project grid and use **Send to
+  Drive** on the selection bar (or the selection's right-click menu). One
+  folder for all of them, a file name each (the default for every asset, and a
+  ✕ to leave one out), one request. Folders ticked alongside are left out.
+  The dialog follows every copy, lists each file's link when done, points out
+  the ones that failed with a *Try the failed ones again*, and offers to move
+  the delivered assets to "Delivered" together. Every file still gets its own
+  notification. A batch is up to 100 assets; the server refuses the whole
+  batch, naming the asset, when one of them has no ready version.
+- **New folder:** the Google Picker cannot create folders, so the dialog does.
+  Pick the parent first (any folder reachable in the Picker, at any depth),
+  then **New folder inside …** makes one there and selects it as the
+  destination; the pencil renames a folder made in that dialog session. With
+  `drive.file` FreeFrame can only create inside a folder this account picked
+  in the Picker (or made here), which is why the parent has to be picked
+  first and why the deliveries folder itself is not a parent unless it was
+  picked; Drive allows two folders of the same name side by side, and
+  FreeFrame does not check for that.
 - The copy runs on the server (the `delivery_worker` service) straight from
   storage to Drive, so it does not depend on the sender's browser or
   connection and works for files of any size. The dialog follows it; the
@@ -85,6 +103,10 @@ five are set; until then the feature is off and says so.
 | GET | `/integrations/google/picker[?scope=root]` | connected user: a short-lived access token plus the Picker's key, app id and root folder (`scope=root` is for admins choosing that folder) |
 | GET | `/assets/{id}/deliveries` | asset access: the history |
 | POST | `/assets/{id}/deliveries` | editor: `{folder_id, folder_name, file_name?, version_id?}` → queued delivery |
+| POST | `/projects/{id}/deliveries` | editor: `{folder_id, folder_name, items: [{asset_id, file_name?, version_id?}]}` (1–100) → the queued deliveries in that order; all or none (404 for an asset not in the project, 409 naming an asset without a ready version) |
+| GET | `/projects/{id}/deliveries?ids=a,b,c` | project member: those deliveries (up to 100) in the order asked, for a dialog following a batch |
+| POST | `/integrations/google/folders` | connected user: `{parent_id, name}` → `{id, name, web_view_link}`; 409 when Drive cannot see the parent for this account |
+| PATCH | `/integrations/google/folders/{id}` | connected user: `{name}` → the folder; renames only what this app may touch |
 | PUT | `/instance/settings` | admin: `drive_root_folder_id`, `drive_root_folder_name` |
 
 The project event stream emits `delivery_updated` (`delivery_id`, `asset_id`,

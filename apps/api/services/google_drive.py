@@ -27,6 +27,8 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files"
+FILES_URL = "https://www.googleapis.com/drive/v3/files"
+FOLDER_MIME = "application/vnd.google-apps.folder"
 
 # drive.file is enough: the app sees only what people pick in the Picker and
 # what it creates itself, and Google treats it as non-sensitive (no review).
@@ -44,6 +46,11 @@ class GoogleDriveError(Exception):
 
 class GoogleAuthError(GoogleDriveError):
     """The user's authorization is gone (revoked, expired, or undecryptable)."""
+
+
+class GoogleFolderNotFound(GoogleDriveError):
+    """Drive answered 404: under drive.file that usually means the folder was
+    never picked (or created) by this app for this account."""
 
 
 class _Transient(Exception):
@@ -132,6 +139,45 @@ def userinfo(access_token: str, client: Optional[httpx.Client] = None) -> dict:
     if r.status_code != 200:
         raise GoogleDriveError(f"Could not read the Google account: {_json_or_text(r)}")
     return r.json()
+
+
+# ─── Drive folders ────────────────────────────────────────────────────────────
+
+_FOLDER_FIELDS = {"fields": "id,name,webViewLink", "supportsAllDrives": "true"}
+
+
+def _folder_result(r: httpx.Response, what: str) -> dict:
+    if r.status_code == 200:
+        return r.json()
+    if r.status_code == 401:
+        raise GoogleAuthError("Google account disconnected: reconnect it in Settings → Profile")
+    if r.status_code == 404:
+        raise GoogleFolderNotFound("Drive can't find that folder for this account")
+    raise GoogleDriveError(f"Drive refused the {what}: {_json_or_text(r)}")
+
+
+def create_folder(access_token: str, *, name: str, parent_id: str, client: Optional[httpx.Client] = None) -> dict:
+    """A new folder inside `parent_id`; returns Drive's `{id, name, webViewLink}`."""
+    c = client or _client()
+    r = c.post(
+        FILES_URL,
+        params=_FOLDER_FIELDS,
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"name": name, "mimeType": FOLDER_MIME, "parents": [parent_id]},
+    )
+    return _folder_result(r, "folder")
+
+
+def rename_folder(access_token: str, folder_id: str, *, name: str, client: Optional[httpx.Client] = None) -> dict:
+    """Only the name changes; returns the folder as `create_folder` does."""
+    c = client or _client()
+    r = c.patch(
+        f"{FILES_URL}/{folder_id}",
+        params=_FOLDER_FIELDS,
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"name": name},
+    )
+    return _folder_result(r, "rename")
 
 
 # ─── Drive upload ─────────────────────────────────────────────────────────────

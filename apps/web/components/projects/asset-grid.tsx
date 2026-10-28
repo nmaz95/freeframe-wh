@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { X, Download, MoreHorizontal, Layers, Share2, Trash2, FolderInput, FolderIcon, Check, Minus, Film, Music, Image as ImageIcon, Images } from 'lucide-react'
+import { X, Download, MoreHorizontal, Layers, Share2, Trash2, FolderInput, FolderIcon, Check, Minus, Film, Music, Image as ImageIcon, Images, CloudUpload } from 'lucide-react'
 import { cn, formatBytes } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/shared/avatar'
@@ -105,6 +105,9 @@ interface AssetGridProps {
   /** "Change status" on the selection bar and the selection's right-click
    *  menu, for the selected assets (folders have no status). */
   onBulkSetStatus?: (assetIds: string[], status: AssetStatusDef) => void
+  /** "Send to Google Drive…" on the selection bar and the selection's
+   *  right-click menu, for the selected assets (folders are left out). */
+  onBulkSendToDrive?: (assetIds: string[]) => void
   /** Actions rendered on the right side of the navigator bar */
   actions?: React.ReactNode
   /** ⌘/Ctrl-A selects everything shown, shift-click selects a range,
@@ -174,6 +177,7 @@ export function AssetGrid({
   folderPaths,
   onAssetSetStatus,
   onBulkSetStatus,
+  onBulkSendToDrive,
   actions,
   selectionShortcuts = false,
   onDeselectAll,
@@ -270,6 +274,9 @@ export function AssetGrid({
     statuses,
     onSetStatus: onBulkSetStatus && selectedAssetIds.size > 0
       ? (s) => onBulkSetStatus(Array.from(selectedAssetIds), s)
+      : undefined,
+    onSendToDrive: onBulkSendToDrive && selectedAssetIds.size > 0
+      ? () => onBulkSendToDrive(Array.from(selectedAssetIds))
       : undefined,
   }
 
@@ -875,6 +882,11 @@ export function AssetGrid({
           <div className="flex-1" />
           {selectionActions.onSetStatus && selectionActions.statuses && selectionActions.statuses.length > 0 && (
             <ChangeStatusDropdown statuses={selectionActions.statuses} onPick={selectionActions.onSetStatus} />
+          )}
+          {selectionActions.onSendToDrive && (
+            <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onSendToDrive}>
+              <CloudUpload className="h-4 w-4" /> Send to Drive
+            </Button>
           )}
           {selectionActions.onDelete && (
             <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onDelete}>

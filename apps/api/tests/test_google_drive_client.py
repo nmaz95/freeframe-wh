@@ -62,6 +62,57 @@ def test_start_resumable_upload_returns_the_session_uri():
     assert "webViewLink" in seen["params"]["fields"]
 
 
+def test_create_folder_posts_the_folder_metadata():
+    seen = {}
+
+    def handler(request):
+        seen["method"] = request.method
+        seen["url"] = str(request.url).split("?")[0]
+        seen["params"] = dict(request.url.params)
+        seen["body"] = json.loads(request.content)
+        seen["auth"] = request.headers["authorization"]
+        return httpx.Response(200, json={"id": "f-new", "name": "Spot", "webViewLink": "https://drive.google.com/drive/folders/f-new"})
+
+    out = gd.create_folder("at", name="Spot", parent_id="f-barilla", client=_client(handler))
+    assert out["id"] == "f-new"
+    assert seen["method"] == "POST" and seen["url"] == gd.FILES_URL
+    assert seen["body"] == {"name": "Spot", "mimeType": gd.FOLDER_MIME, "parents": ["f-barilla"]}
+    assert seen["params"] == {"fields": "id,name,webViewLink", "supportsAllDrives": "true"}
+    assert seen["auth"] == "Bearer at"
+
+
+def test_create_folder_tells_an_unseen_parent_from_a_dead_grant():
+    def gone(request):
+        return httpx.Response(404, json={"error": {"message": "File not found: root"}})
+    with pytest.raises(gd.GoogleFolderNotFound):
+        gd.create_folder("at", name="X", parent_id="root", client=_client(gone))
+
+    def dead(request):
+        return httpx.Response(401, text="")
+    with pytest.raises(gd.GoogleAuthError):
+        gd.create_folder("at", name="X", parent_id="root", client=_client(dead))
+
+    def refused(request):
+        return httpx.Response(403, json={"error": {"message": "quota"}})
+    with pytest.raises(gd.GoogleDriveError) as info:
+        gd.create_folder("at", name="X", parent_id="root", client=_client(refused))
+    assert "quota" in str(info.value) and not isinstance(info.value, gd.GoogleFolderNotFound)
+
+
+def test_rename_folder_patches_only_the_name():
+    seen = {}
+
+    def handler(request):
+        seen["method"] = request.method
+        seen["url"] = str(request.url).split("?")[0]
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"id": "f-1", "name": "Final"})
+
+    assert gd.rename_folder("at", "f-1", name="Final", client=_client(handler))["name"] == "Final"
+    assert seen["method"] == "PATCH" and seen["url"] == f"{gd.FILES_URL}/f-1"
+    assert seen["body"] == {"name": "Final"}
+
+
 class _DriveSession:
     """A fake resumable session that records what it was sent and can be told
     to keep only part of a chunk, or to fail once."""

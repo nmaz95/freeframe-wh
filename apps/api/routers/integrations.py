@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -24,11 +24,12 @@ from ..models.integration import DeliveryStatus, DriveDelivery, GoogleConnection
 from ..models.project import ProjectRole
 from ..models.user import User, UserStatus
 from ..schemas.integration import (
-    DeliveryCreate, DeliveryResponse, GoogleAuthorizeResponse, GoogleStatusResponse, PickerConfigResponse,
+    DeliveriesCreate, DeliveryCreate, DeliveryItem, DeliveryResponse, DriveFolderCreate, DriveFolderRename,
+    DriveFolderResponse, GoogleAuthorizeResponse, GoogleStatusResponse, PickerConfigResponse,
 )
 from ..services import google_drive
 from ..services.crypto_service import decrypt_secret, encrypt_secret
-from ..services.permissions import require_asset_access, require_project_role
+from ..services.permissions import require_asset_access, require_project_role, require_project_visible
 from ..services.redis_service import pop_oauth_state, store_oauth_state
 from ..services.s3_service import build_download_filename
 from ..tasks.celery_app import send_task_safe
@@ -222,6 +223,72 @@ def list_deliveries(asset_id: uuid.UUID, db: Session = Depends(get_db), current_
     return [_delivery_response(d, name, vn) for d, name, vn in rows]
 
 
+def _new_delivery(
+    asset: Asset, media_file, version_number: int | None, user: User,
+    folder_id: str, folder_name: str, file_name: str | None,
+) -> DriveDelivery:
+    stem = f"{asset.name} v{version_number}" if version_number else asset.name
+    return DriveDelivery(
+        id=uuid.uuid4(),
+        asset_id=asset.id,
+        version_id=media_file.version_id,
+        user_id=user.id,
+        folder_id=folder_id,
+        folder_name=folder_name,
+        file_name=file_name or build_download_filename(stem, media_file.s3_key_raw, media_file.original_filename),
+        status=DeliveryStatus.queued,
+        progress_percent=0,
+    )
+
+
+def _queue_deliveries(
+    db: Session, project_id: uuid.UUID, user: User, folder_id: str, folder_name: str, items: list[DeliveryItem],
+) -> list[tuple[DriveDelivery, int | None]]:
+    """Queue one copy per item, all or none: the role once, every asset live
+    and in this project (404 otherwise), every version ready (409 naming the
+    asset), then the rows in one commit and a task each."""
+    _require_enabled()
+    require_project_role(db, project_id, user, ProjectRole.editor)
+    if _connection(db, user.id) is None:
+        raise HTTPException(status_code=409, detail="Your Google account is not connected")
+    wanted: dict[uuid.UUID, DeliveryItem] = {}
+    for item in items:
+        wanted.setdefault(item.asset_id, item)
+    assets = (
+        db.query(Asset)
+        .filter(Asset.id.in_(list(wanted)), Asset.project_id == project_id, Asset.deleted_at.is_(None))
+        .all()
+    )
+    by_id = {a.id: a for a in assets}
+    if len(by_id) != len(wanted):
+        raise HTTPException(status_code=404, detail="Asset not found")
+    checked: list[tuple[Asset, DeliveryItem, object]] = []
+    for asset_id, item in wanted.items():
+        asset = by_id[asset_id]
+        try:
+            _, media_file = _ready_media_file(db, asset.id, item.version_id, user)
+        except HTTPException as exc:
+            if exc.status_code in (404, 409):
+                raise HTTPException(status_code=exc.status_code, detail=f"{asset.name}: {exc.detail}")
+            raise
+        checked.append((asset, item, media_file))
+    version_ids = list({mf.version_id for _, _, mf in checked})
+    versions = db.query(AssetVersion).filter(AssetVersion.id.in_(version_ids)).all()
+    number_of = {v.id: v.version_number for v in versions}
+    rows = [
+        (_new_delivery(asset, mf, number_of.get(mf.version_id), user, folder_id, folder_name, item.file_name),
+         number_of.get(mf.version_id))
+        for asset, item, mf in checked
+    ]
+    db.add_all([row for row, _ in rows])
+    db.commit()
+    for row, _ in rows:
+        db.refresh(row)
+    for row, _ in rows:
+        send_task_safe(deliver_to_drive, str(row.id))
+    return rows
+
+
 @router.post(
     "/assets/{asset_id}/deliveries",
     response_model=DeliveryResponse,
@@ -237,27 +304,102 @@ def create_delivery(
     asset = db.query(Asset).filter(Asset.id == asset_id, Asset.deleted_at.is_(None)).first()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
-    if _connection(db, current_user.id) is None:
-        raise HTTPException(status_code=409, detail="Your Google account is not connected")
-    _, media_file = _ready_media_file(db, asset_id, body.version_id, current_user)
-    version = db.query(AssetVersion).filter(AssetVersion.id == media_file.version_id).first()
-    version_number = version.version_number if version else None
-    stem = f"{asset.name} v{version_number}" if version_number else asset.name
-    file_name = body.file_name or build_download_filename(stem, media_file.s3_key_raw, media_file.original_filename)
-    delivery = DriveDelivery(
-        id=uuid.uuid4(),
-        asset_id=asset.id,
-        version_id=media_file.version_id,
-        user_id=current_user.id,
-        folder_id=body.folder_id,
-        folder_name=body.folder_name,
-        file_name=file_name,
-        status=DeliveryStatus.queued,
-        progress_percent=0,
+    item = DeliveryItem(asset_id=asset_id, file_name=body.file_name, version_id=body.version_id)
+    [(delivery, version_number)] = _queue_deliveries(
+        db, asset.project_id, current_user, body.folder_id, body.folder_name, [item],
     )
-    db.add(delivery)
-    db.commit()
-    db.refresh(delivery)
-    send_task_safe(deliver_to_drive, str(delivery.id))
     return _delivery_response(delivery, current_user.name, version_number)
+
+
+@router.post(
+    "/projects/{project_id}/deliveries",
+    response_model=list[DeliveryResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("gdrive_send", 30, 60))],
+)
+def create_deliveries(
+    project_id: uuid.UUID, body: DeliveriesCreate,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """Queue copies of several assets of one project to one Drive folder, as
+    this user: all of them, in the order asked, or none (see `_queue_deliveries`)."""
+    rows = _queue_deliveries(db, project_id, current_user, body.folder_id, body.folder_name, body.items)
+    return [_delivery_response(d, current_user.name, vn) for d, vn in rows]
+
+
+@router.get("/projects/{project_id}/deliveries", response_model=list[DeliveryResponse])
+def list_project_deliveries(
+    project_id: uuid.UUID,
+    ids: str = Query(..., description="Comma-separated delivery ids, up to 100"),
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """A batch of deliveries by id, in the order asked; ids from another
+    project are left out rather than answered."""
+    try:
+        wanted = [uuid.UUID(i.strip()) for i in ids.split(",") if i.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid delivery id")
+    if not wanted or len(wanted) > 100:
+        raise HTTPException(status_code=400, detail="Between 1 and 100 delivery ids")
+    require_project_visible(db, project_id, current_user)
+    rows = (
+        db.query(DriveDelivery, User.name, AssetVersion.version_number)
+        .join(Asset, Asset.id == DriveDelivery.asset_id)
+        .outerjoin(User, User.id == DriveDelivery.user_id)
+        .outerjoin(AssetVersion, AssetVersion.id == DriveDelivery.version_id)
+        .filter(DriveDelivery.id.in_(wanted), Asset.project_id == project_id)
+        .all()
+    )
+    by_id = {d.id: (d, name, vn) for d, name, vn in rows}
+    return [_delivery_response(*by_id[i]) for i in wanted if i in by_id]
+
+
+# ─── Drive folders ────────────────────────────────────────────────────────────
+
+_FOLDER_ID = Path(max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+def _folder_call(fn):
+    """Run a Drive folder call and turn its failures into answers."""
+    try:
+        f = fn()
+    except google_drive.GoogleFolderNotFound:
+        raise HTTPException(
+            status_code=409,
+            detail="FreeFrame can't see that folder with your Google account; pick it again with Choose folder",
+        )
+    except google_drive.GoogleAuthError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except google_drive.GoogleDriveError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    return DriveFolderResponse(id=f["id"], name=f.get("name") or "", web_view_link=f.get("webViewLink"))
+
+
+@router.post(
+    "/integrations/google/folders",
+    response_model=DriveFolderResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("gdrive_folder", 30, 60))],
+)
+def create_drive_folder(
+    body: DriveFolderCreate,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """A new folder inside one the person picked, created as them. With
+    drive.file the parent has to be one this account picked (or created
+    here): the deliveries root itself is not, unless it was picked too."""
+    _require_enabled()
+    token = _access_token_for(db, current_user)
+    return _folder_call(lambda: google_drive.create_folder(token, name=body.name, parent_id=body.parent_id))
+
+
+@router.patch("/integrations/google/folders/{folder_id}", response_model=DriveFolderResponse)
+def rename_drive_folder(
+    body: DriveFolderRename,
+    folder_id: str = _FOLDER_ID,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """Rename a folder this app created for this account."""
+    _require_enabled()
+    token = _access_token_for(db, current_user)
+    return _folder_call(lambda: google_drive.rename_folder(token, folder_id, name=body.name))
