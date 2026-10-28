@@ -44,8 +44,9 @@ Viewers see the status but cannot change it. Share-link guests never see
 statuses.
 
 **Several at once.** Tick the cards (or press ⌘/Ctrl-A, *Select all* in the
-selection bar, or the checkbox in the list view's header), then *Change
-status* in the bar or in the right-click menu of a selected item. One
+selection bar, or the checkbox in the list view's header; *Deselect all*, the
+✕ or Esc clear the selection), then *Change status* in the bar or in the
+right-click menu of a selected item. One
 confirmation names the count, one request moves them, and the people the
 status notifies are told once (see below). Folders in the selection are
 ignored: a status belongs to an asset. Assets already in that status are

@@ -863,7 +863,7 @@ export function AssetGrid({
       {/* Bottom selection action bar (Frame.io style) */}
       {!shareMode && totalSelected > 0 && (
         <div className="sticky bottom-0 z-20 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-bg-elevated px-4 py-2.5 shadow-xl">
-          <button onClick={clearSelection} className="text-text-tertiary hover:text-text-primary transition-colors">
+          <button onClick={clearSelection} aria-label="Clear selection" className="text-text-tertiary hover:text-text-primary transition-colors">
             <X className="h-4 w-4" />
           </button>
           <span className="text-sm text-text-primary font-medium whitespace-nowrap">
@@ -879,6 +879,9 @@ export function AssetGrid({
               Select all
             </Button>
           )}
+          <Button variant="ghost" size="sm" className="text-text-secondary" onClick={clearSelection}>
+            Deselect all
+          </Button>
           <div className="flex-1" />
           {selectionActions.onSetStatus && selectionActions.statuses && selectionActions.statuses.length > 0 && (
             <ChangeStatusDropdown statuses={selectionActions.statuses} onPick={selectionActions.onSetStatus} />

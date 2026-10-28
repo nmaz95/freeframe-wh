@@ -256,6 +256,26 @@ describe.each(['grid', 'list'] as const)('AssetGrid selection shortcuts (%s view
     expect(screen.queryByRole('button', { name: 'Select all' })).toBeNull()
   })
 
+  it('"Deselect all" on the bar clears the whole selection, and stays while anything is selected', () => {
+    render(<AssetGrid assets={assets} projectId="p1" folders={[folder]} selectionShortcuts />)
+    expect(screen.queryByRole('button', { name: 'Deselect all' })).toBeNull()
+
+    fireEvent.click(clip(1), { metaKey: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
+    expect(selectedCount()).toBe(6)
+    // Everything selected: "Select all" is gone, "Deselect all" is there.
+    expect(screen.getByRole('button', { name: 'Deselect all' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Deselect all' }))
+    expect(selectedCount()).toBe(0)
+    expect(screen.queryByRole('button', { name: 'Deselect all' })).toBeNull()
+
+    // A partial selection offers both.
+    fireEvent.click(clip(2), { metaKey: true })
+    expect(screen.getByRole('button', { name: 'Select all' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Deselect all' })).toBeInTheDocument()
+  })
+
   it('⌘-A in a text field selects the text, not the clips', () => {
     render(
       <>
