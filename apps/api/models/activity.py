@@ -27,6 +27,7 @@ class NotificationType(str, PyEnum):
     comment = "comment"
     approval = "approval"
     status_change = "status_change"
+    delivery = "delivery"
 
 class Mention(Base):
     __tablename__ = "mentions"

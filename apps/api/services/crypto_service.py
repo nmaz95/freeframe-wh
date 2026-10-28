@@ -30,3 +30,10 @@ def decrypt_password(encrypted: str) -> str:
     """Decrypt a stored password back to plaintext."""
     f = _get_fernet()
     return f.decrypt(encrypted.encode()).decode()
+
+
+# The same scheme for any reversible secret (an OAuth refresh token, say).
+# Note the key is derived from JWT_SECRET: rotating it makes every stored
+# secret unreadable, so callers must treat a failed decrypt as "gone".
+encrypt_secret = encrypt_password
+decrypt_secret = decrypt_password

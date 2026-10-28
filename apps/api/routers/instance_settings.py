@@ -45,7 +45,14 @@ def _build_response(db: Session, row: InstanceSettings | None, user: User) -> In
         allow_original_downloads=(
             (row.allow_original_downloads if row else False) if user.is_superadmin else None
         ),
+        drive_root_folder_id=_text(getattr(row, "drive_root_folder_id", None)) if user.is_superadmin else None,
+        drive_root_folder_name=_text(getattr(row, "drive_root_folder_name", None)) if user.is_superadmin else None,
     )
+
+
+def _text(value) -> str | None:
+    """A stored string, or None for anything else (an unset column, a mock)."""
+    return value if isinstance(value, str) and value else None
 
 
 # exclude_none: a member gets no admin-only key at all, rather than a null in
@@ -79,6 +86,13 @@ def update_instance_settings(
         row.upload_part_size_bytes = body.upload_part_size_bytes
     if body.allow_original_downloads is not None:
         row.allow_original_downloads = body.allow_original_downloads
+    if body.drive_root_folder_id is not None:
+        row.drive_root_folder_id = body.drive_root_folder_id.strip() or None
+        # The name travels with the id: clearing one clears both.
+        if not row.drive_root_folder_id:
+            row.drive_root_folder_name = None
+    if body.drive_root_folder_name is not None and row.drive_root_folder_id:
+        row.drive_root_folder_name = body.drive_root_folder_name.strip() or None
     db.commit()
     db.refresh(row)
     return _build_response(db, row, current_user)

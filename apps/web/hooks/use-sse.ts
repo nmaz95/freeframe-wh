@@ -46,6 +46,14 @@ export interface AssetStatusUpdatedEvent {
   user_id: string
 }
 
+export interface DeliveryUpdatedEvent {
+  delivery_id: string
+  asset_id: string
+  user_id: string
+  status: 'queued' | 'uploading' | 'done' | 'failed'
+  percent: number
+}
+
 export type SSEEventType =
   | 'transcode_progress'
   | 'transcode_complete'
@@ -54,6 +62,7 @@ export type SSEEventType =
   | 'comment_resolved'
   | 'approval_updated'
   | 'asset_status_updated'
+  | 'delivery_updated'
 
 export interface SSEEvent {
   type: SSEEventType
@@ -65,6 +74,7 @@ export interface SSEEvent {
     | CommentResolvedEvent
     | ApprovalUpdatedEvent
     | AssetStatusUpdatedEvent
+    | DeliveryUpdatedEvent
 }
 
 // ─── Hook options ─────────────────────────────────────────────────────────────
@@ -77,6 +87,7 @@ export interface UseSSEOptions {
   onCommentResolved?: (data: CommentResolvedEvent) => void
   onApprovalUpdated?: (data: ApprovalUpdatedEvent) => void
   onAssetStatusUpdated?: (data: AssetStatusUpdatedEvent) => void
+  onDeliveryUpdated?: (data: DeliveryUpdatedEvent) => void
   enabled?: boolean
 }
 
@@ -120,6 +131,7 @@ export function useSSE(projectId: string | null | undefined, options: UseSSEOpti
     onCommentResolved,
     onApprovalUpdated,
     onAssetStatusUpdated,
+    onDeliveryUpdated,
     enabled = true,
   } = options
 
@@ -135,6 +147,7 @@ export function useSSE(projectId: string | null | undefined, options: UseSSEOpti
     onCommentResolved,
     onApprovalUpdated,
     onAssetStatusUpdated,
+    onDeliveryUpdated,
   })
 
   React.useEffect(() => {
@@ -146,6 +159,7 @@ export function useSSE(projectId: string | null | undefined, options: UseSSEOpti
       onCommentResolved,
       onApprovalUpdated,
       onAssetStatusUpdated,
+      onDeliveryUpdated,
     }
   })
 
@@ -315,6 +329,19 @@ export function useSSE(projectId: string | null | undefined, options: UseSSEOpti
           const event: SSEEvent = { type: 'asset_status_updated', data }
           setLastEvent(event)
           callbackRefs.current.onAssetStatusUpdated?.(data)
+        } catch {
+          // ignore malformed events
+        }
+      })
+
+      // ── delivery_updated ──
+      es.addEventListener('delivery_updated', (e: MessageEvent) => {
+        if (destroyed) return
+        try {
+          const data = JSON.parse(e.data) as DeliveryUpdatedEvent
+          const event: SSEEvent = { type: 'delivery_updated', data }
+          setLastEvent(event)
+          callbackRefs.current.onDeliveryUpdated?.(data)
         } catch {
           // ignore malformed events
         }

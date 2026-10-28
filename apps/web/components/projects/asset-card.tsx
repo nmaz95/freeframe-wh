@@ -42,6 +42,7 @@ interface AssetCardProps {
   loadDownloadOptions?: () => Promise<DownloadOption[] | null>
   onRename?: () => void
   onDelete?: () => void
+  onSendToDrive?: () => void
   /** The asset's status, shown as a dot on the thumbnail. */
   status?: AssetStatusDef | null
   /** With these, the menu offers "Set status". */
@@ -89,6 +90,7 @@ export function AssetCard({
   loadDownloadOptions,
   onRename,
   onDelete,
+  onSendToDrive,
   status,
   statuses,
   onSetStatus,
@@ -114,6 +116,7 @@ export function AssetCard({
       loadDownloadOptions={loadDownloadOptions}
       onRename={onRename}
       onDelete={onDelete}
+      onSendToDrive={onSendToDrive}
       statuses={statuses}
       currentStatusId={status?.id ?? null}
       onSetStatus={onSetStatus}

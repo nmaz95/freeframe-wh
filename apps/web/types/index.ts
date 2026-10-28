@@ -22,7 +22,8 @@ export type NotificationType =
   | "due_soon"
   | "comment"
   | "approval"
-  | "status_change";
+  | "status_change"
+  | "delivery";
 
 export type UserStatus = "active" | "deactivated" | "pending_invite" | "pending_verification";
 
@@ -34,7 +35,8 @@ export type ActivityAction =
   | "assigned"
   | "approved"
   | "rejected"
-  | "status_changed";
+  | "status_changed"
+  | "delivered";
 
 export type FileType = "image" | "audio" | "video" | "document";
 
@@ -72,6 +74,9 @@ export interface InstanceSettings {
   upload_part_size_bytes?: number;
   /** Admins only. Whether people outside a project may download originals. */
   allow_original_downloads?: boolean;
+  /** Admins only. The Drive folder "Send to Google Drive" opens on. */
+  drive_root_folder_id?: string | null;
+  drive_root_folder_name?: string | null;
 }
 
 export interface Team {
@@ -461,8 +466,58 @@ export interface Notification {
   comment_preview: string | null;
   project_id: string | null;
   actor_id?: string | null;
-  /** What a `status_change` said, as it was said. */
-  payload?: StatusChangePayload | null;
+  /** What a `status_change` or a `delivery` said, as it was said. */
+  payload?: StatusChangePayload | DeliveryPayload | null;
+}
+
+/** A `delivery` notification: a copy to Google Drive finished or failed. */
+export interface DeliveryPayload {
+  delivery_id: string;
+  status: "done" | "failed";
+  folder_name: string;
+  file_name: string;
+  web_view_link: string | null;
+  error: string | null;
+}
+
+// ─── Google Drive ─────────────────────────────────────────────────────────────
+
+export interface GoogleDriveStatus {
+  /** False when the instance has no Google keys configured. */
+  enabled: boolean;
+  connected: boolean;
+  email: string | null;
+  connected_at: string | null;
+}
+
+export interface GooglePickerConfig {
+  access_token: string;
+  expires_in: number;
+  api_key: string;
+  app_id: string;
+  root_folder_id: string;
+  root_folder_name: string | null;
+}
+
+export type DeliveryStatus = "queued" | "uploading" | "done" | "failed";
+
+export interface DriveDelivery {
+  id: string;
+  asset_id: string;
+  version_id: string;
+  version_number: number | null;
+  user_id: string;
+  user_name: string | null;
+  folder_id: string;
+  folder_name: string;
+  file_name: string;
+  status: DeliveryStatus;
+  progress_percent: number;
+  drive_file_id: string | null;
+  web_view_link: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string | null;
 }
 
 export interface StatusChangePayload {
@@ -470,6 +525,16 @@ export interface StatusChangePayload {
   status_name: string;
   status_color: string;
   from_status_name: string | null;
+}
+
+/** `payload` as a status change, or null for any other type. */
+export function statusChangePayload(n: { type: NotificationType; payload?: StatusChangePayload | DeliveryPayload | null }): StatusChangePayload | null {
+  return n.type === "status_change" && n.payload ? (n.payload as StatusChangePayload) : null;
+}
+
+/** `payload` as a delivery, or null for any other type. */
+export function deliveryPayload(n: { type: NotificationType; payload?: StatusChangePayload | DeliveryPayload | null }): DeliveryPayload | null {
+  return n.type === "delivery" && n.payload ? (n.payload as DeliveryPayload) : null;
 }
 
 // ─── Asset statuses & pipeline roles ─────────────────────────────────────────

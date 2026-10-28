@@ -22,6 +22,7 @@ from ..models.instance_branding import InstanceBranding
 from ..models.user import User
 from ..models.activity import Mention, ActivityLog, Notification
 from ..models.pipeline import PipelineRoleAssignment
+from ..models.integration import DriveDelivery
 from ..services.owned_keys import is_project_logo_key
 from ..services.s3_service import (
     list_stale_multipart_uploads, abort_multipart_upload, delete_object, delete_prefix, list_keys,
@@ -121,6 +122,7 @@ def _purge_version(db, version_id, counts: PurgeCounts) -> None:
         return
     # carousel items reference media_file_id + version_id — remove before media files
     db.query(CarouselItem).filter(CarouselItem.version_id == version_id).delete(synchronize_session=False)
+    db.query(DriveDelivery).filter(DriveDelivery.version_id == version_id).delete(synchronize_session=False)
     media = db.query(MediaFile).filter(MediaFile.version_id == version_id).all()
     for mf in media:
         _reclaim_media_s3(mf, counts)
@@ -169,6 +171,7 @@ def _purge_asset(db, asset_id, counts: PurgeCounts) -> None:
     db.query(ActivityLog).filter(ActivityLog.asset_id == asset_id).delete(synchronize_session=False)
     db.query(Notification).filter(Notification.asset_id == asset_id).delete(synchronize_session=False)
     db.query(PipelineRoleAssignment).filter(PipelineRoleAssignment.asset_id == asset_id).delete(synchronize_session=False)
+    db.query(DriveDelivery).filter(DriveDelivery.asset_id == asset_id).delete(synchronize_session=False)
     db.query(Asset).filter(Asset.id == asset_id).delete(synchronize_session=False)
     counts.assets += 1
     db.flush()

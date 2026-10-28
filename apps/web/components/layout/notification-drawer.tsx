@@ -8,6 +8,7 @@ import {
   MessageSquare,
   CheckCircle,
   CircleDot,
+  CloudUpload,
   X,
   Settings,
 } from 'lucide-react'
@@ -16,6 +17,7 @@ import { withBasePath } from '@/lib/base-path'
 import { useNotificationStore } from '@/stores/notification-store'
 import { formatRelativeTime } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { statusChangePayload, deliveryPayload } from '@/types'
 import type { Notification, NotificationType } from '@/types'
 
 const notificationIcons: Record<NotificationType, React.ElementType> = {
@@ -25,6 +27,7 @@ const notificationIcons: Record<NotificationType, React.ElementType> = {
   comment: MessageSquare,
   approval: CheckCircle,
   status_change: CircleDot,
+  delivery: CloudUpload,
 }
 
 function getNotificationText(n: Notification): { title: string; subtitle: string | null } {
@@ -42,9 +45,17 @@ function getNotificationText(n: Notification): { title: string; subtitle: string
     case 'due_soon':
       return { title: `${asset} is due soon`, subtitle: null }
     case 'status_change': {
-      const to = n.payload?.status_name ?? 'a new status'
-      const from = n.payload?.from_status_name
+      const p = statusChangePayload(n)
+      const to = p?.status_name ?? 'a new status'
+      const from = p?.from_status_name
       return { title: `${actor} moved ${asset} to ${to}`, subtitle: from ? `was ${from}` : null }
+    }
+    case 'delivery': {
+      const p = deliveryPayload(n)
+      if (p?.status === 'failed') {
+        return { title: `Delivery of ${asset} failed`, subtitle: p.error ?? null }
+      }
+      return { title: `${asset} delivered to ${p?.folder_name ?? 'Google Drive'}`, subtitle: p?.file_name ?? null }
     }
     default:
       return { title: 'New notification', subtitle: null }
@@ -58,6 +69,13 @@ function NotificationItem({ notification, onClose }: { notification: Notificatio
 
   function handleClick() {
     if (!notification.read) markAsRead(notification.id)
+    // A finished delivery opens the file on Drive.
+    const delivery = deliveryPayload(notification)
+    if (delivery?.status === 'done' && delivery.web_view_link) {
+      window.open(delivery.web_view_link, '_blank', 'noopener')
+      onClose()
+      return
+    }
     // Navigate to asset if possible
     if (notification.project_id && notification.asset_id) {
       const qs = notification.comment_id ? `?commentId=${notification.comment_id}` : ''
@@ -85,11 +103,15 @@ function NotificationItem({ notification, onClose }: { notification: Notificatio
           (notification.type === 'assignment' || notification.type === 'due_soon') &&
             'bg-status-warning/15 text-status-warning',
           notification.type === 'status_change' && 'bg-bg-tertiary',
+          notification.type === 'delivery' &&
+            (deliveryPayload(notification)?.status === 'failed'
+              ? 'bg-status-error/15 text-status-error'
+              : 'bg-status-success/15 text-status-success'),
         )}
         // A status change wears its status's colour, which is not a theme token.
         style={
-          notification.type === 'status_change' && notification.payload?.status_color
-            ? { color: notification.payload.status_color }
+          statusChangePayload(notification)?.status_color
+            ? { color: statusChangePayload(notification)!.status_color }
             : undefined
         }
       >

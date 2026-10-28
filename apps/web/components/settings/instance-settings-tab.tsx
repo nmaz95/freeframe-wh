@@ -8,7 +8,9 @@ import { bytesToGb, gbToBytes } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { StorageUsage } from "@/components/shared/storage-usage";
 import { useBrandingStore, type LoginMode } from "@/stores/branding-store";
-import type { InstanceSettings } from "@/types";
+import type { InstanceSettings, GoogleDriveStatus, GooglePickerConfig } from "@/types";
+import { pickDriveFolder } from "@/lib/google-picker";
+import { Button } from "@/components/ui/button";
 
 const LOGIN_MODE_LABELS: Record<LoginMode, string> = {
   magic_code: "Magic code",
@@ -126,6 +128,51 @@ export function InstanceSettingsTab() {
   const [originalsSaved, flashOriginalsSaved] = useSavedFlash();
   const originals: OriginalDownloads =
     pendingOriginals ?? (data?.allow_original_downloads ? "original" : "transcode");
+
+  // Google Drive deliveries: the folder the Picker opens on. The admin picks
+  // it with the Picker too, from their own connected account.
+  const { data: google } = useSWR<GoogleDriveStatus>(
+    "/integrations/google",
+    () => api.get<GoogleDriveStatus>("/integrations/google"),
+  );
+  const [rootBusy, setRootBusy] = React.useState(false);
+  const [rootError, setRootError] = React.useState("");
+  const [rootSaved, flashRootSaved] = useSavedFlash();
+  const saveRoot = async (id: string, name: string) => {
+    setRootBusy(true);
+    setRootError("");
+    try {
+      const updated = await api.put<InstanceSettings>("/instance/settings", {
+        drive_root_folder_id: id,
+        drive_root_folder_name: name,
+      });
+      mutate("/instance/settings", updated, { revalidate: false });
+      flashRootSaved();
+    } catch (err: unknown) {
+      setRootError(err instanceof Error ? err.message : "Could not save the folder");
+    } finally {
+      setRootBusy(false);
+    }
+  };
+  const chooseRoot = async () => {
+    setRootBusy(true);
+    setRootError("");
+    try {
+      const cfg = await api.get<GooglePickerConfig>("/integrations/google/picker?scope=root");
+      const picked = await pickDriveFolder({
+        accessToken: cfg.access_token,
+        apiKey: cfg.api_key,
+        appId: cfg.app_id,
+        parentId: "root",
+        title: "Choose the deliveries folder",
+      });
+      if (picked) await saveRoot(picked.id, picked.name);
+    } catch (err: unknown) {
+      setRootError(err instanceof Error ? err.message : "Could not open the folder picker");
+    } finally {
+      setRootBusy(false);
+    }
+  };
 
   const handleOriginalsChange = async (value: OriginalDownloads) => {
     if (value === originals) return;
@@ -401,6 +448,48 @@ export function InstanceSettingsTab() {
               shared with directly can download. Project members can always download the
               original.
             </p>
+          )}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-sm font-semibold text-text-primary">Google Drive deliveries</h2>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-text-secondary">Deliveries folder</span>
+            {rootSaved && <SavedMark />}
+          </div>
+          {google && !google.enabled ? (
+            <p className="text-xs text-text-tertiary">
+              Not configured: set the Google keys in the server environment first (see docs/google-drive-deliveries.md).
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-sm">
+                <span className="min-w-0 flex-1 truncate text-text-primary">
+                  {data?.drive_root_folder_name ?? (data?.drive_root_folder_id ? "Folder set" : "Not set")}
+                  {data?.drive_root_folder_id && (
+                    <span className="ml-2 font-mono text-2xs text-text-tertiary">{data.drive_root_folder_id}</span>
+                  )}
+                </span>
+                <Button size="sm" variant="secondary" onClick={chooseRoot} loading={rootBusy} disabled={!google?.connected}>
+                  Choose…
+                </Button>
+                {data?.drive_root_folder_id && (
+                  <Button size="sm" variant="ghost" onClick={() => saveRoot("", "")} disabled={rootBusy}>
+                    Clear
+                  </Button>
+                )}
+              </div>
+              {rootError ? (
+                <p className="text-xs text-status-error">{rootError}</p>
+              ) : (
+                <p className="text-xs text-text-tertiary">
+                  The folder &quot;Send to Google Drive&quot; opens on; its subfolders are the clients.
+                  {google && !google.connected ? " Connect your own Google account in Settings → Profile to pick it." : ""}
+                </p>
+              )}
+            </>
           )}
         </div>
       </section>

@@ -415,6 +415,7 @@ def test_gc_covers_all_inbound_fks_to_purged_tables():
     import apps.api.models.user  # noqa: F401
     import apps.api.models.instance_settings  # noqa: F401
     import apps.api.models.pipeline  # noqa: F401
+    import apps.api.models.integration  # noqa: F401
     from apps.api.database import Base
 
     # Every table the GC cascade hard-deletes rows from (grep `cleanup_tasks.py` for
@@ -424,7 +425,7 @@ def test_gc_covers_all_inbound_fks_to_purged_tables():
         "collections", "metadata_fields", "approvals", "asset_shares", "asset_metadata", "carousel_items",
         "collection_shares", "share_link_items", "share_link_activity", "watermark_settings",
         "project_members", "project_brandings", "activity_logs", "annotations", "comment_attachments",
-        "comment_reactions", "mentions", "notifications", "pipeline_role_assignments",
+        "comment_reactions", "mentions", "notifications", "pipeline_role_assignments", "drive_deliveries",
     }
     # (referencing_table, referencing_column) confirmed handled by a _purge_* helper.
     KNOWN_HANDLED = {
@@ -441,10 +442,10 @@ def test_gc_covers_all_inbound_fks_to_purged_tables():
         ("asset_versions", "asset_id"), ("comments", "asset_id"), ("share_links", "asset_id"),
         ("share_link_items", "asset_id"), ("asset_shares", "asset_id"), ("asset_metadata", "asset_id"),
         ("activity_logs", "asset_id"), ("notifications", "asset_id"), ("approvals", "asset_id"),
-        ("pipeline_role_assignments", "asset_id"),
+        ("pipeline_role_assignments", "asset_id"), ("drive_deliveries", "asset_id"),
         # -> asset_versions.id
         ("media_files", "version_id"), ("carousel_items", "version_id"),
-        ("comments", "version_id"), ("approvals", "version_id"),
+        ("comments", "version_id"), ("approvals", "version_id"), ("drive_deliveries", "version_id"),
         # -> media_files.id
         ("carousel_items", "media_file_id"),
         # -> comments.id

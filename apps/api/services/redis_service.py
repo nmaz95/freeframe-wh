@@ -108,6 +108,27 @@ def delete_invite_token(token: str) -> None:
     r.delete(key)
 
 
+# Google OAuth: the `state` of a consent redirect names the user who started
+# it, since the callback arrives from the browser without a bearer token.
+OAUTH_STATE_PREFIX = "gdrive_oauth:"
+OAUTH_STATE_EXPIRY_SECONDS = 10 * 60
+
+
+def store_oauth_state(nonce: str, user_id: str) -> None:
+    get_redis().setex(f"{OAUTH_STATE_PREFIX}{nonce}", OAUTH_STATE_EXPIRY_SECONDS, user_id)
+
+
+def pop_oauth_state(nonce: str) -> Optional[str]:
+    """The user id a state was issued to, consumed on read so it is single-use."""
+    r = get_redis()
+    key = f"{OAUTH_STATE_PREFIX}{nonce}"
+    pipe = r.pipeline()
+    pipe.get(key)
+    pipe.delete(key)
+    value, _ = pipe.execute()
+    return value
+
+
 # ── IP-based rate limiting ────────────────────────────────────────────────────
 
 RATE_LIMIT_PREFIX = "rl:"

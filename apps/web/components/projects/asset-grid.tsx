@@ -85,6 +85,8 @@ interface AssetGridProps {
   loadAssetDownloadOptions?: (asset: Asset) => Promise<DownloadOption[] | null>
   onAssetRename?: (asset: Asset) => void
   onAssetDelete?: (asset: Asset) => void
+  /** "Send to Google Drive…" in the asset menus. Absent = not offered. */
+  onAssetSendToDrive?: (asset: Asset) => void
   /** The instance's statuses, for the dot on each card and the Set status menu. */
   statuses?: AssetStatusDef[]
   /** An asset's status (null or absent id reads as the default). */
@@ -156,6 +158,7 @@ export function AssetGrid({
   loadAssetDownloadOptions,
   onAssetRename,
   onAssetDelete,
+  onAssetSendToDrive,
   statuses,
   statusFor,
   rankOf,
@@ -547,6 +550,7 @@ export function AssetGrid({
                 loadDownloadOptions={loadAssetDownloadOptions ? () => loadAssetDownloadOptions(asset) : undefined}
                 onRename={onAssetRename ? () => onAssetRename(asset) : undefined}
                 onDelete={onAssetDelete ? () => onAssetDelete(asset) : undefined}
+                onSendToDrive={onAssetSendToDrive ? () => onAssetSendToDrive(asset) : undefined}
                 status={statusFor ? statusFor(asset) : null}
                 statuses={statuses}
                 onSetStatus={onAssetSetStatus ? (s) => onAssetSetStatus(asset, s) : undefined}
@@ -690,6 +694,7 @@ export function AssetGrid({
                 loadDownloadOptions={loadAssetDownloadOptions ? () => loadAssetDownloadOptions(asset) : undefined}
                 onRename={onAssetRename ? () => onAssetRename(asset) : undefined}
                 onDelete={onAssetDelete ? () => onAssetDelete(asset) : undefined}
+                onSendToDrive={onAssetSendToDrive ? () => onAssetSendToDrive(asset) : undefined}
                 statuses={statuses}
                 currentStatusId={status?.id ?? null}
                 onSetStatus={onAssetSetStatus ? (s) => onAssetSetStatus(asset, s) : undefined}

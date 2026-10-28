@@ -74,6 +74,18 @@ class Settings(BaseSettings):
     sse_auth_max_age_seconds: float = Field(1.0, ge=0)
     sse_auth_recheck_seconds: float = Field(15.0, gt=0)
     frontend_url: str = "http://localhost:3000"
+    # Google Drive deliveries ("Send to Google Drive"). All five must be set for
+    # the feature to switch on; see docs/google-drive-deliveries.md. The redirect
+    # URI must match the OAuth client exactly: behind the production proxy it
+    # is `{FRONTEND_URL}/api/integrations/google/callback`.
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    google_oauth_redirect_uri: str = ""
+    # The Picker's developer key (restricted to the Google Picker API) and the
+    # Cloud project *number*, which the Picker needs to grant the app access
+    # to the folders people pick under the drive.file scope.
+    google_api_key: str = ""
+    google_app_id: str = ""
     # Extra browser origins allowed by CORS, comma-separated (in addition to the
     # frontend + localhost defaults). Set to "*" to allow any origin — handy for
     # testing on a LAN via a machine's IP; do not use "*" in production.
@@ -215,6 +227,17 @@ class Settings(BaseSettings):
                     f"leave S3_ENDPOINT unset."
                 )
         return self
+
+    @property
+    def google_drive_enabled(self) -> bool:
+        """Whether every Google Drive setting is present."""
+        return all(
+            (v or "").strip()
+            for v in (
+                self.google_oauth_client_id, self.google_oauth_client_secret,
+                self.google_oauth_redirect_uri, self.google_api_key, self.google_app_id,
+            )
+        )
 
     @property
     def frontend_origin(self) -> str:

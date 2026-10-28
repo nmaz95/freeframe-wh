@@ -26,6 +26,9 @@ import { useAssetStatuses } from '@/hooks/use-asset-statuses'
 import { useStatusChangeConfirm } from '@/hooks/use-status-change-confirm'
 import { StatusDropdown } from '@/components/projects/menus/status-menu'
 import { PipelineRolesPanel } from '@/components/projects/pipeline-roles-panel'
+import { AssetDeliveriesPanel, deliveriesKey } from '@/components/projects/asset-deliveries-panel'
+import { SendToDriveDialog } from '@/components/projects/send-to-drive-dialog'
+import { mutate as globalMutate } from 'swr'
 import { api } from '@/lib/api'
 import { projectFolderHref } from '@/lib/project-links'
 import { useUploadStore, visibleFiles } from '@/stores/upload-store'
@@ -43,6 +46,7 @@ import {
   Columns2,
   Upload,
   GitCompareArrows,
+  CloudUpload,
 } from 'lucide-react'
 import Link from 'next/link'
 import { cn, formatTimecode } from '@/lib/utils'
@@ -185,6 +189,8 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const canComment = currentRole !== 'viewer'
   const canSetStatus = currentRole !== 'viewer'
   const canEditRoles = currentRole === 'owner' || currentRole === 'editor'
+  const canDeliver = canEditRoles
+  const [deliverOpen, setDeliverOpen] = useState(false)
   const memberIds = useMemo(() => (members ?? []).map((m) => m.user_id), [members])
   const { data: memberUsers } = useSWR<User[]>(
     memberIds.length > 0 ? `/users?ids=${memberIds.join(',')}` : null,
@@ -194,18 +200,24 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     () => Object.fromEntries((memberUsers ?? []).map((u) => [u.id, u])) as Record<string, User | undefined>,
     [memberUsers],
   )
+  const applyStatus = useCallback(
+    async (target: AssetResponse, status: AssetStatusDef) => {
+      const updated = await api.put<AssetResponse>(`/assets/${target.id}/status`, { status_id: status.id })
+      patchAsset({ status_id: updated.status_id })
+    },
+    [patchAsset],
+  )
   const handleSetStatus = useCallback(
     async (status: AssetStatusDef) => {
       if (!asset) return
       if (!(await confirmStatusChange(asset.name, statusFor(asset), status))) return
       try {
-        const updated = await api.put<AssetResponse>(`/assets/${asset.id}/status`, { status_id: status.id })
-        patchAsset({ status_id: updated.status_id })
+        await applyStatus(asset, status)
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : 'Could not change the status')
       }
     },
-    [asset, patchAsset, toast, confirmStatusChange, statusFor],
+    [asset, applyStatus, toast, confirmStatusChange, statusFor],
   )
   // delete_comment lets a project owner remove anyone's comment.
   const canModerate = currentRole === 'owner'
@@ -246,6 +258,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     onAssetStatusUpdated: (d) => {
       if (d.asset_id === asset?.id) patchAsset({ status_id: d.status_id })
     },
+    onDeliveryUpdated: (d) => { void globalMutate(deliveriesKey(d.asset_id)) },
   })
 
   // Transcode events are not the only thing that changes this list. Discarding
@@ -609,6 +622,13 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           />
         </div>
       )}
+      <div className="space-y-2 border-t border-border pt-4">
+        <div>
+          <p className="text-xs font-medium text-text-tertiary uppercase tracking-wide">Deliveries</p>
+          <p className="text-2xs text-text-tertiary mt-0.5">Copies of this asset sent to Google Drive.</p>
+        </div>
+        <AssetDeliveriesPanel assetId={asset.id} onSend={canDeliver ? () => setDeliverOpen(true) : undefined} compact />
+      </div>
     </div>
   )
 
@@ -616,6 +636,13 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   return (
     <div className="absolute inset-0 flex flex-col overflow-hidden">
       {statusConfirmDialog}
+      <SendToDriveDialog
+        asset={deliverOpen ? asset : null}
+        onOpenChange={setDeliverOpen}
+        statuses={statuses}
+        statusFor={statusFor}
+        onMoveToStatus={applyStatus}
+      />
       {/* ─── Top bar (Frame.io style) ──────────────────────────────────── */}
       <div className="flex items-center justify-between border-b border-border px-3 h-12 bg-bg-secondary shrink-0">
         {/* Left: back + breadcrumb. The name is the first thing the bar gives
@@ -730,6 +757,17 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             }}
           />
           <VersionSwitcher versions={versions} />
+          {canDeliver && (
+            <button
+              type="button"
+              onClick={() => setDeliverOpen(true)}
+              className="hidden sm:inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border text-xs text-text-primary hover:border-border-focus transition-colors"
+              title="Send to Google Drive"
+            >
+              <CloudUpload className="h-3.5 w-3.5" />
+              Send to Drive
+            </button>
+          )}
           {asset && canCompare(asset.asset_type, versions) && (
             <button
               onClick={() => {

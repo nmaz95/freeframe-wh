@@ -49,6 +49,9 @@ import { useSSE } from "@/hooks/use-sse";
 import { StatusDot } from "@/components/shared/status-badge";
 import { StatusDropdown } from "@/components/projects/menus/status-menu";
 import { PipelineRolesPanel } from "@/components/projects/pipeline-roles-panel";
+import { AssetDeliveriesPanel, deliveriesKey } from "@/components/projects/asset-deliveries-panel";
+import { SendToDriveDialog } from "@/components/projects/send-to-drive-dialog";
+import { mutate as globalMutate } from "swr";
 import { FolderTree } from "@/components/projects/folder-tree";
 import { ShareLinksTable } from "@/components/projects/share-links-table";
 import { ShareLinkMenuItems } from "@/components/projects/menus/share-link-menu";
@@ -94,6 +97,8 @@ export default function ProjectDetailPage() {
   );
   const [showTrash, setShowTrash] = React.useState(false);
   const [showShareLinks, setShowShareLinks] = React.useState(false);
+  // The asset "Send to Google Drive…" was opened for, or null.
+  const [assetToDeliver, setAssetToDeliver] = React.useState<AssetResponse | null>(null);
   // The sidebar's Statuses filter: one status id, or everything. Kept in the
   // URL so a filtered view can be linked and survives a reload.
   const [statusFilter, setStatusFilterState] = React.useState<string | null>(
@@ -242,22 +247,31 @@ export default function ProjectDetailPage() {
   // Someone else moving an asset shows on its card without a reload.
   useSSE(showTrash ? null : projectId, {
     onAssetStatusUpdated: () => { void mutateAssets(); },
+    onDeliveryUpdated: (d) => { void globalMutate(deliveriesKey(d.asset_id)); },
   });
+
+  // The move itself; `handleSetStatus` asks first, the Drive dialog is its own ask.
+  const applyStatus = React.useCallback(
+    async (asset: Asset, status: AssetStatusDef) => {
+      const updated = await api.put<AssetResponse>(`/assets/${asset.id}/status`, { status_id: status.id });
+      await mutateAssets(
+        (current) => current?.map((a) => (a.id === asset.id ? { ...a, status_id: updated.status_id } : a)),
+        { revalidate: false },
+      );
+    },
+    [mutateAssets],
+  );
 
   const handleSetStatus = React.useCallback(
     async (asset: Asset, status: AssetStatusDef) => {
       if (!(await confirmStatusChange(asset.name, statusFor(asset), status))) return;
       try {
-        const updated = await api.put<AssetResponse>(`/assets/${asset.id}/status`, { status_id: status.id });
-        await mutateAssets(
-          (current) => current?.map((a) => (a.id === asset.id ? { ...a, status_id: updated.status_id } : a)),
-          { revalidate: false },
-        );
+        await applyStatus(asset, status);
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : "Could not change the status");
       }
     },
-    [mutateAssets, toast, confirmStatusChange, statusFor],
+    [applyStatus, toast, confirmStatusChange, statusFor],
   );
 
   // How many assets in view sit in each status, for the sidebar.
@@ -366,6 +380,8 @@ export default function ProjectDetailPage() {
   const canSetStatus = currentRole !== "viewer";
   // Naming who holds a pipeline role on an asset takes the editor role.
   const canEditRoles = currentRole === "owner" || currentRole === "editor";
+  // Sending an asset to Google Drive, likewise.
+  const canDeliver = currentRole === "owner" || currentRole === "editor";
   const memberIds = React.useMemo(() => (members ?? []).map((m) => m.user_id), [members]);
   const { data: memberUsers } = useSWR<User[]>(
     memberIds.length > 0 ? `/users?ids=${memberIds.join(",")}` : null,
@@ -943,6 +959,7 @@ export default function ProjectDetailPage() {
               rankOf={rankOf}
               statusFilter={statusFilter}
               onAssetSetStatus={canSetStatus ? handleSetStatus : undefined}
+              onAssetSendToDrive={canDeliver ? (a) => setAssetToDeliver(a as AssetResponse) : undefined}
               selectionShortcuts
               onDeselectAll={() => setSelectedAsset(null)}
               // The toolbar's Upload menu, which this opens, is there only
@@ -1368,6 +1385,19 @@ export default function ProjectDetailPage() {
                       </div>
                     )}
 
+                    <div className="pt-3 border-t border-border space-y-2">
+                      <div>
+                        <p className="text-xs font-medium text-text-tertiary uppercase tracking-wide">Deliveries</p>
+                        <p className="text-2xs text-text-tertiary mt-0.5">Copies of this asset sent to Google Drive.</p>
+                      </div>
+                      <AssetDeliveriesPanel
+                        key={selectedAsset.id}
+                        assetId={selectedAsset.id}
+                        onSend={canDeliver ? () => setAssetToDeliver(selectedAsset) : undefined}
+                        compact
+                      />
+                    </div>
+
                     <div className="pt-3 border-t border-border grid grid-cols-2 gap-2">
                       <Button asChild className="w-full col-span-2" size="sm">
                         <Link
@@ -1473,6 +1503,13 @@ export default function ProjectDetailPage() {
 
       {/* Bulk delete confirmation */}
       {statusConfirmDialog}
+      <SendToDriveDialog
+        asset={assetToDeliver}
+        onOpenChange={(open) => { if (!open) setAssetToDeliver(null); }}
+        statuses={statuses}
+        statusFor={statusFor}
+        onMoveToStatus={applyStatus}
+      />
       <ConfirmDialog
         open={pendingBulkDelete !== null}
         onOpenChange={(open) => {

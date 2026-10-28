@@ -11,6 +11,9 @@ class InstanceSettingsUpdate(BaseModel):
     # Lets share-link visitors, public-project visitors and direct shares download
     # originals. Project members always can.
     allow_original_downloads: bool | None = None
+    # The Drive folder deliveries start in. An empty string clears it.
+    drive_root_folder_id: str | None = Field(default=None, max_length=128)
+    drive_root_folder_name: str | None = Field(default=None, max_length=255)
 
     @field_validator("upload_part_size_bytes")
     @classmethod
@@ -33,3 +36,5 @@ class InstanceSettingsResponse(BaseModel):
     # Admin only.
     upload_part_size_bytes: int | None = None
     allow_original_downloads: bool | None = None
+    drive_root_folder_id: str | None = None
+    drive_root_folder_name: str | None = None

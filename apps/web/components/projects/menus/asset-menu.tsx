@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Download, Link as LinkIcon, Pencil, Share2, Trash2 } from 'lucide-react'
+import { CloudUpload, Download, Link as LinkIcon, Pencil, Share2, Trash2 } from 'lucide-react'
 import { copyToClipboard } from '@/lib/utils'
 import { withBasePath } from '@/lib/base-path'
 import { DownloadSubmenu } from '@/components/shared/download-menu'
@@ -17,6 +17,8 @@ export interface AssetMenuHandlers {
   loadDownloadOptions?: () => Promise<DownloadOption[] | null>
   onRename?: () => void
   onDelete?: () => void
+  /** "Send to Google Drive…": present for editors and up when the instance has Drive set up. */
+  onSendToDrive?: () => void
   /** With these, a "Set status" submenu lists the instance's statuses. */
   statuses?: AssetStatusDef[]
   currentStatusId?: string | null
@@ -35,6 +37,7 @@ export function AssetMenuItems({
   loadDownloadOptions,
   onRename,
   onDelete,
+  onSendToDrive,
   statuses,
   currentStatusId,
   onSetStatus,
@@ -63,6 +66,11 @@ export function AssetMenuItems({
             Download
           </MenuAction>
         ))}
+      {onSendToDrive && (
+        <MenuAction icon={CloudUpload} onSelect={onSendToDrive}>
+          Send to Google Drive…
+        </MenuAction>
+      )}
       <MenuAction
         icon={LinkIcon}
         immediate

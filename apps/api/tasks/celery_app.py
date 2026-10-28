@@ -18,6 +18,7 @@ celery_app = Celery(
         "apps.api.tasks.reminder_tasks",
         "apps.api.tasks.email_tasks",
         "apps.api.tasks.cleanup_tasks",
+        "apps.api.tasks.drive_tasks",
     ],
 )
 
@@ -43,6 +44,7 @@ celery_app.conf.update(
         Queue("email_high"),   # Magic codes, invites - immediate
         Queue("email_low"),    # Mentions, comments - can be delayed
         Queue("maintenance"),  # Housekeeping - long, I/O heavy, latency-insensitive
+        Queue("delivery"),     # Copies to Google Drive - network-bound, can run for a long time
     ),
     task_default_queue="default",
     # Route tasks to queues.
@@ -62,6 +64,9 @@ celery_app.conf.update(
         # is a full FFmpeg re-encode, so it belongs with the other transcoding
         # work rather than behind an hour-long bucket sweep.
         "apply_watermark": {"queue": "transcoding"},
+        # Streams an original from storage to Google Drive: hours for a big
+        # master, and nothing to do with the CPU, so not behind the encoders.
+        "apps.api.tasks.drive_tasks.*": {"queue": "delivery"},
         "apps.api.tasks.email_tasks.send_magic_code_email": {"queue": "email_high"},
         "apps.api.tasks.email_tasks.send_invite_email": {"queue": "email_high"},
         "apps.api.tasks.email_tasks.send_mention_email": {"queue": "email_low"},

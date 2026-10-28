@@ -7,6 +7,7 @@ import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ProfileAvatarEditor } from '@/components/settings/profile-avatar-editor'
+import { GoogleDriveConnection } from '@/components/settings/google-drive-connection'
 import { setTokens } from '@/lib/auth'
 
 export default function ProfilePage() {
@@ -219,6 +220,10 @@ export default function ProfilePage() {
           </Button>
         </form>
       </section>
+
+      <React.Suspense fallback={null}>
+        <GoogleDriveConnection />
+      </React.Suspense>
     </div>
   )
 }

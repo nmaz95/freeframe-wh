@@ -8,6 +8,7 @@ import {
   MessageSquare,
   CheckCircle,
   CircleDot,
+  CloudUpload,
 } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notification-store'
 import { usePageTitle } from '@/hooks/use-page-title'
@@ -15,6 +16,7 @@ import { formatRelativeTime } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/empty-state'
 import { cn } from '@/lib/utils'
+import { statusChangePayload, deliveryPayload } from '@/types'
 import type { Notification, NotificationType } from '@/types'
 
 const notificationIcons: Record<NotificationType, React.ElementType> = {
@@ -24,6 +26,7 @@ const notificationIcons: Record<NotificationType, React.ElementType> = {
   comment: MessageSquare,
   approval: CheckCircle,
   status_change: CircleDot,
+  delivery: CloudUpload,
 }
 
 const notificationLabels: Record<NotificationType, string> = {
@@ -33,6 +36,7 @@ const notificationLabels: Record<NotificationType, string> = {
   comment: 'commented on an asset',
   approval: 'updated approval status',
   status_change: 'changed an asset\'s status',
+  delivery: 'sent an asset to Google Drive',
 }
 
 function NotificationItem({ notification }: { notification: Notification }) {
@@ -56,10 +60,14 @@ function NotificationItem({ notification }: { notification: Notification }) {
           (notification.type === 'assignment' || notification.type === 'due_soon') &&
             'bg-status-warning/15 text-status-warning',
           notification.type === 'status_change' && 'bg-bg-tertiary',
+          notification.type === 'delivery' &&
+            (deliveryPayload(notification)?.status === 'failed'
+              ? 'bg-status-error/15 text-status-error'
+              : 'bg-status-success/15 text-status-success'),
         )}
         style={
-          notification.type === 'status_change' && notification.payload?.status_color
-            ? { color: notification.payload.status_color }
+          statusChangePayload(notification)?.status_color
+            ? { color: statusChangePayload(notification)!.status_color }
             : undefined
         }
       >
@@ -68,9 +76,13 @@ function NotificationItem({ notification }: { notification: Notification }) {
 
       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
         <p className="text-sm text-text-primary">
-          {notification.type === 'status_change' && notification.payload
-            ? `${notification.actor_name ?? 'Someone'} moved ${notification.asset_name ?? 'an asset'} to ${notification.payload.status_name}`
-            : notificationLabels[notification.type]}
+          {statusChangePayload(notification)
+            ? `${notification.actor_name ?? 'Someone'} moved ${notification.asset_name ?? 'an asset'} to ${statusChangePayload(notification)!.status_name}`
+            : deliveryPayload(notification)
+              ? deliveryPayload(notification)!.status === 'failed'
+                ? `Delivery of ${notification.asset_name ?? 'an asset'} failed`
+                : `${notification.asset_name ?? 'An asset'} delivered to ${deliveryPayload(notification)!.folder_name}`
+              : notificationLabels[notification.type]}
         </p>
         <p className="text-xs text-text-tertiary">
           {formatRelativeTime(notification.created_at)}
