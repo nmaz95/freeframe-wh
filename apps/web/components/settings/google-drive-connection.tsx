@@ -2,7 +2,6 @@
 
 import * as React from 'react'
 import useSWR from 'swr'
-import { useSearchParams } from 'next/navigation'
 import { CloudUpload } from 'lucide-react'
 import { api } from '@/lib/api'
 import { redirectTo } from '@/lib/navigation'
@@ -27,18 +26,25 @@ function errorText(err: unknown, fallback: string): string {
 
 /** Settings → Profile: the user's Google account for "Send to Google Drive". */
 export function GoogleDriveConnection() {
-  const searchParams = useSearchParams()
   const { data, error, mutate } = useSWR<GoogleDriveStatus>(GOOGLE_STATUS_KEY, (k: string) => api.get<GoogleDriveStatus>(k))
   const [busy, setBusy] = React.useState(false)
   const [message, setMessage] = React.useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
   const [confirmDisconnect, setConfirmDisconnect] = React.useState(false)
 
-  // Back from Google: say how it went and drop the query from the URL.
+  // Back from Google: say how it went and drop the query from the URL. Read
+  // from the window rather than useSearchParams, which would take this whole
+  // section out of the page's static render.
   React.useEffect(() => {
-    const result = searchParams.get('google')
+    let params: URLSearchParams
+    try {
+      params = new URLSearchParams(window.location.search)
+    } catch {
+      return
+    }
+    const result = params.get('google')
     if (!result) return
     if (result === 'connected') setMessage({ kind: 'ok', text: 'Google Drive connected.' })
-    else setMessage({ kind: 'error', text: RETURN_REASONS[searchParams.get('reason') ?? ''] ?? 'Could not connect Google Drive.' })
+    else setMessage({ kind: 'error', text: RETURN_REASONS[params.get('reason') ?? ''] ?? 'Could not connect Google Drive.' })
     void mutate()
     try {
       const url = new URL(window.location.href)
@@ -48,7 +54,7 @@ export function GoogleDriveConnection() {
     } catch {
       // leave the URL as it is
     }
-  }, [searchParams, mutate])
+  }, [mutate])
 
   async function connect() {
     setBusy(true)

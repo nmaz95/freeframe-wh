@@ -221,9 +221,7 @@ export default function ProfilePage() {
         </form>
       </section>
 
-      <React.Suspense fallback={null}>
-        <GoogleDriveConnection />
-      </React.Suspense>
+      <GoogleDriveConnection />
     </div>
   )
 }

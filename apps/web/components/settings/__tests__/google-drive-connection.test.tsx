@@ -4,11 +4,9 @@ import type { GoogleDriveStatus } from '@/types'
 
 const h = vi.hoisted(() => ({
   status: { enabled: true, connected: false, email: null, connected_at: null } as GoogleDriveStatus,
-  params: new URLSearchParams(),
   mutate: vi.fn(),
 }))
 vi.mock('swr', () => ({ default: () => ({ data: h.status, mutate: h.mutate }), mutate: vi.fn() }))
-vi.mock('next/navigation', () => ({ useSearchParams: () => h.params }))
 const post = vi.fn()
 const del = vi.fn()
 vi.mock('@/lib/api', () => ({ api: { get: vi.fn(), post: (...a: unknown[]) => post(...a), delete: (...a: unknown[]) => del(...a) } }))
@@ -20,7 +18,7 @@ import { GoogleDriveConnection } from '../google-drive-connection'
 describe('GoogleDriveConnection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    h.params = new URLSearchParams()
+    window.history.replaceState(null, '', '/settings/profile')
     h.status = { enabled: true, connected: false, email: null, connected_at: null }
   })
 
@@ -44,10 +42,11 @@ describe('GoogleDriveConnection', () => {
   })
 
   it('reports the outcome when coming back from Google', () => {
-    h.params = new URLSearchParams('google=error&reason=denied')
+    window.history.replaceState(null, '', '/settings/profile?google=error&reason=denied')
     render(<GoogleDriveConnection />)
     expect(screen.getByRole('alert')).toHaveTextContent('Google sign-in was cancelled.')
     expect(h.mutate).toHaveBeenCalled()
+    expect(window.location.search).toBe('')
   })
 
   it('explains when the instance has no Google keys', () => {
