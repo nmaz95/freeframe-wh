@@ -38,6 +38,8 @@ vi.mock('@/components/layout/header', () => ({
   Header: () => <div data-testid="header">header</div>,
 }))
 vi.mock('@/components/layout/command-palette', () => ({ CommandPalette: () => null }))
+vi.mock('@/components/layout/mobile-header', () => ({ MobileHeader: () => null, MobileHeaderSlot: () => null }))
+vi.mock('@/components/layout/mobile-tab-bar', () => ({ MobileTabBar: () => null, TAB_BAR_PX: 64 }))
 vi.mock('@/components/layout/uploads-panel', () => ({ UploadsPanel: () => null }))
 vi.mock('@/components/layout/upload-sse-bridge', () => ({ UploadSSEBridge: () => null }))
 vi.mock('@/components/shared/powered-by-badge', () => ({

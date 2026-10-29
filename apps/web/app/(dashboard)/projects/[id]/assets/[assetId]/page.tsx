@@ -7,6 +7,7 @@ import { ReviewProvider, useReview } from '@/components/review/review-provider'
 import { VideoPlayer } from '@/components/review/video-player'
 import { AudioPlayer } from '@/components/review/audio-player'
 import { MobileCommentSheet, PEEK_PX, type SheetState } from '@/components/review/mobile-comment-sheet'
+import { initialSheetState } from '@/components/review/sheet-state'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useMediaTransport } from '@/hooks/use-media-transport'
 import { ImageViewer } from '@/components/review/image-viewer'
@@ -91,8 +92,12 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   // the little height there is.
   const isWide = useMediaQuery('(min-width: 768px)')
   const isLandscape = useMediaQuery('(orientation: landscape)')
+  // Below `sm` the status and the navigator leave the title row for a row of
+  // their own. Decided here, not by a hidden class, so each exists once in
+  // the document at any width.
+  const isSmUp = useMediaQuery('(min-width: 640px)')
   const useSheet = !isWide && !isLandscape
-  const [sheetState, setSheetState] = useState<SheetState>('peek')
+  const [sheetState, setSheetState] = useState<SheetState>(() => initialSheetState(useSheet))
   const [sheetHeight, setSheetHeight] = useState(PEEK_PX)
   const { isPlaying, togglePlay, mediaRootRef } = useMediaTransport({ toggleVideo: togglePlayback })
   const reviewRootRef = useRef<HTMLDivElement>(null)
@@ -107,8 +112,14 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   // short enough that the list was taking room the drawing surface needed.
   // Restored to `peek` on the way out rather than to whatever it was, so the
   // media is never left half covered by a sheet the user did not reopen.
+  //
+  // Only when drawing starts or stops: the first state is `initialSheetState`'s,
+  // and this effect used to overwrite it with `peek` before the first paint
+  // (a first-run flag is not enough, since dev-mode StrictMode runs effects twice).
+  const drawingWas = useRef(isDrawingMode)
   useEffect(() => {
-    if (!useSheet) return
+    if (!useSheet || drawingWas.current === isDrawingMode) return
+    drawingWas.current = isDrawingMode
     setSheetState(isDrawingMode ? 'compose' : 'peek')
   }, [isDrawingMode, useSheet])
 
@@ -669,13 +680,15 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           >
             {asset.name}
           </span>
-          <StatusDropdown
-            statuses={statuses}
-            current={statusFor(asset)}
-            onPick={handleSetStatus}
-            disabled={!canSetStatus}
-            className="ml-1 hidden sm:inline-flex"
-          />
+          {isSmUp && (
+            <StatusDropdown
+              statuses={statuses}
+              current={statusFor(asset)}
+              onPick={handleSetStatus}
+              disabled={!canSetStatus}
+              className="ml-1"
+            />
+          )}
         </div>
 
         {/* Center: asset navigation, then the credit.
@@ -787,7 +800,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
               title="Compare versions"
             >
               <GitCompareArrows className="h-3.5 w-3.5" />
-              Compare
+              <span className="max-sm:hidden">Compare</span>
             </button>
           )}
           <button
@@ -796,7 +809,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             title="Upload new version"
           >
             <Upload className="h-3.5 w-3.5" />
-            New Version
+            <span className="max-sm:hidden">New Version</span>
           </button>
           <ShareDialog assetId={asset.id} assetName={asset.name} projectId={projectId} asset={asset} />
           <button
@@ -818,6 +831,24 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           </button>
         </div>
       </div>
+
+      {/* The phone's second row: the status, which the title row gives up
+          below `sm`. It is the thing a reviewer on a phone most often changes
+          and it used to be hidden there, with the name truncated to nothing
+          beside it. The name gets the whole row's width here too. */}
+      {!isSmUp && (
+        <div className="flex items-center gap-2 border-b border-border bg-bg-secondary px-3 h-10 shrink-0">
+          <StatusDropdown
+            statuses={statuses}
+            current={statusFor(asset)}
+            onPick={handleSetStatus}
+            disabled={!canSetStatus}
+          />
+          <span className="min-w-0 flex-1 truncate text-right text-[12px] text-text-secondary" title={asset.name}>
+            {asset.name}
+          </span>
+        </div>
+      )}
 
       {/* ─── Main content: viewer + sidebar ────────────────────────────── */}
       {compareOpen && asset && currentVersion && canCompare(asset.asset_type, versions) ? (

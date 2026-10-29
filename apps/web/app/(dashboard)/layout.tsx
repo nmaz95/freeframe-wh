@@ -6,6 +6,8 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useUploadStore } from "@/stores/upload-store";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { MobileHeader } from "@/components/layout/mobile-header";
+import { MobileTabBar, TAB_BAR_PX } from "@/components/layout/mobile-tab-bar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { KeyboardShortcuts } from "@/components/layout/keyboard-shortcuts";
 import { UploadsPanel } from "@/components/layout/uploads-panel";
@@ -63,22 +65,53 @@ export default function DashboardLayout({
       onDragOver={refuseFileDrag}
       onDrop={refuseFileDrag}
     >
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((c) => !c)}
-      />
+      {/* The rail and the header are the desktop shell. Below `md` the phone
+          shell takes their place: a capsule header floating over the page and
+          a tab bar along the bottom edge. Both shells stay mounted and CSS
+          picks one, so a rotation or a resize never remounts the page. The
+          asset viewer renders its own chrome in either case. */}
+      <div className="contents max-md:hidden">
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((c) => !c)}
+        />
+      </div>
 
       {/* Main content area */}
       <main
         className={cn(
-          "flex flex-1 flex-col overflow-hidden transition-[margin] duration-200 ease-spring",
+          "relative flex flex-1 flex-col overflow-hidden transition-[margin] duration-200 ease-spring max-md:ml-0",
           sidebarCollapsed ? "ml-[52px]" : "ml-[220px]",
         )}
       >
-        {!isAssetViewer && <Header onSearchOpen={() => setCommandOpen(true)} />}
+        {!isAssetViewer && (
+          <div className="contents max-md:hidden">
+            <Header onSearchOpen={() => setCommandOpen(true)} />
+          </div>
+        )}
+        {!isAssetViewer && (
+          <div className="pointer-events-none absolute inset-x-3 top-safe [--ff-top:0.5rem] z-30 md:hidden">
+            <MobileHeader onSearchOpen={() => setCommandOpen(true)} />
+          </div>
+        )}
 
-        <div className="relative flex-1 overflow-y-auto">{children}</div>
+        <div
+          className={cn(
+            "relative flex-1 overflow-y-auto",
+            // The page scrolls under the floating chrome, so it starts below
+            // the capsule and ends above the tab bar. Only on the phone shell.
+            !isAssetViewer && "max-md:pt-safe max-md:[--ff-pt:4.5rem] max-md:pb-tabbar max-md:[--ff-tabbar:5rem]",
+          )}
+        >
+          {children}
+        </div>
       </main>
+
+      {!isAssetViewer && (
+        <div className="md:hidden" style={{ ["--ff-tabbar" as string]: `${TAB_BAR_PX}px` }}>
+          <MobileTabBar onSearchOpen={() => setCommandOpen(true)} />
+        </div>
+      )}
 
       {/* Attribution floats over the content rather than living in the sidebar,
           so it stays put whether the rail is collapsed or expanded and doesn't
@@ -96,8 +129,10 @@ export default function DashboardLayout({
           bar's controls off the screen. Nothing takes its place there: bringing
           this one back would restore the send-button collision on exactly the
           widths where the composer is hardest to hit. */}
+      {/* Not on the phone shell either: the tab bar owns the bottom edge
+          there, and the badge floated straight over the last row of cards. */}
       {!isAssetViewer && (
-        <PoweredByBadge className="fixed bottom-safe right-safe [--ff-bottom:1rem] [--ff-right:1rem] z-20 rounded-full border border-border bg-bg-elevated/90 px-3 py-1.5 shadow-lg backdrop-blur-sm" />
+        <PoweredByBadge className="fixed bottom-safe right-safe [--ff-bottom:1rem] [--ff-right:1rem] z-20 rounded-full border border-border bg-bg-elevated/90 px-3 py-1.5 shadow-lg backdrop-blur-sm max-md:hidden" />
       )}
 
       <UploadsPanel railCollapsed={sidebarCollapsed} />

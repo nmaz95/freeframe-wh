@@ -150,9 +150,12 @@ interface NotificationDrawerProps {
   /** Whether the sidebar is the 52px rail or expanded to 220px. The drawer
    *  opens against its right edge, so it has to know which. */
   railCollapsed: boolean
+  /** The phone shell has no rail: the drawer opens from the screen's own
+   *  left edge and takes the width, up to a phablet's worth. */
+  fullWidth?: boolean
 }
 
-export function NotificationDrawer({ open, onClose, railCollapsed }: NotificationDrawerProps) {
+export function NotificationDrawer({ open, onClose, railCollapsed, fullWidth = false }: NotificationDrawerProps) {
   const { notifications, isLoading, fetchNotifications, markAllRead, unreadCount } =
     useNotificationStore()
   const [tab, setTab] = React.useState<'all' | 'unread'>('all')
@@ -172,8 +175,9 @@ export function NotificationDrawer({ open, onClose, railCollapsed }: Notificatio
           expanded offset is gated at `md` so a phone keeps the drawer on screen. */}
       <div
         className={cn(
-          'fixed top-0 right-0 bottom-0 left-[52px] z-40',
-          !railCollapsed && 'md:left-[220px]',
+          'fixed top-0 right-0 bottom-0 z-40',
+          fullWidth ? 'left-0' : 'left-[52px]',
+          !railCollapsed && !fullWidth && 'md:left-[220px]',
         )}
         onClick={onClose}
       />
@@ -181,8 +185,9 @@ export function NotificationDrawer({ open, onClose, railCollapsed }: Notificatio
       {/* Drawer */}
       <div
         className={cn(
-          'fixed left-safe [--ff-left:52px] top-0 z-50 h-full w-[380px] border-r border-border bg-bg-primary shadow-2xl flex flex-col pb-safe animate-in slide-in-from-left-2 duration-150',
-          !railCollapsed && 'md:[--ff-left:220px]',
+          'fixed left-safe top-0 z-50 h-full border-r border-border bg-bg-primary shadow-2xl flex flex-col pb-safe animate-in slide-in-from-left-2 duration-150',
+          fullWidth ? '[--ff-left:0px] w-full max-w-[420px]' : '[--ff-left:52px] w-[380px]',
+          !railCollapsed && !fullWidth && 'md:[--ff-left:220px]',
         )}
       >
         {/* Header */}

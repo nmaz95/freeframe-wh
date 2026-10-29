@@ -27,16 +27,24 @@ const dmSans = DM_Sans({
 // carrying the `data-ff-branding` attribute that sweep is written to skip.
 export async function generateMetadata(): Promise<Metadata> {
   const branding = await getServerBranding();
+  const name = branding?.org_name || "FreeFrame";
   return {
-    title: branding?.org_name || "FreeFrame",
+    title: name,
     description: "Collaborative media review and approval platform",
+    // The install surface: the manifest for Android and desktop browsers, the
+    // Apple meta for Safari's Add to Home Screen. `black-translucent` lets the
+    // page draw under the status bar, which the safe-area padding already
+    // allows for; with any other value iOS paints an opaque bar of its own
+    // above the layout. The manifest route (app/manifest.ts) carries the icons.
+    manifest: withBasePath("/manifest.webmanifest"),
+    appleWebApp: { capable: true, title: name, statusBarStyle: "black-translucent" },
   };
 }
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0A0A0B",
+  themeColor: "#0d0d10",
   // Lets the layout use the full display on a notched phone, and — the reason
   // it is here — makes env(safe-area-inset-*) resolve to real values. Without
   // it iOS reports 0 for all of them, so any padding written against them is
@@ -81,6 +89,10 @@ export default async function RootLayout({
         <link rel="icon" href={favicon} data-ff-branding="" />
         <link rel="shortcut icon" href={favicon} data-ff-branding="" />
         <link rel="apple-touch-icon" href={appleIcon} data-ff-branding="" />
+        {/* Next's `appleWebApp` emits the generic `mobile-web-app-capable`;
+            older Safari reads only the Apple-prefixed name for the
+            standalone window, so both are here. */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
       <body className={`${dmSans.variable} font-sans antialiased`}>
         <ThemeInitializer />

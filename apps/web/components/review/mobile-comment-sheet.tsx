@@ -40,6 +40,7 @@ export interface MobileCommentSheetProps {
  * transport row ended up permanently behind the sheet.
  */
 export const PEEK_PX = 56
+
 /** Handle row + composer, and the drawing toolbar beneath it when marking up a
  *  frame. No comment list at this height, which is the point: someone drawing
  *  is not reading older comments and the media needs the room more. */
@@ -250,7 +251,10 @@ export function MobileCommentSheet({
       data-state={state}
       className={cn(
         position === 'fixed' ? 'fixed' : 'absolute',
-        'inset-x-0 bottom-0 z-40 flex flex-col overflow-hidden rounded-t-xl border-t border-border bg-bg-secondary',
+        // The heavy glass material: the sheet is the phone shell's docked
+        // panel, so it carries the darker, calmer ground, over the media
+        // rather than beside it. 28px corners and a grabber, as a system sheet.
+        'ff-glass-heavy inset-x-0 bottom-0 z-40 flex flex-col overflow-hidden rounded-t-[28px] border-t border-white/10',
       )}
       style={{
         height,
@@ -295,12 +299,16 @@ export function MobileCommentSheet({
         // past 56px to fit the safe-area gutter instead of shrinking its
         // content into it; only the trailing empty padding gets clipped by the
         // outer box's overflow-hidden, never the buttons or text.
-        className="flex min-h-14 shrink-0 touch-none select-none items-center gap-2 px-3"
+        className="relative flex min-h-14 shrink-0 touch-none select-none items-center gap-2 px-3"
         // Inert until the app sets `viewport-fit=cover`: iOS resolves
         // env(safe-area-inset-*) to 0 without it. Tracked in #340; kept here so
         // the row is correct the moment that lands.
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 top-1.5 h-[5px] w-10 -translate-x-1/2 rounded-full bg-text-tertiary/60"
+        />
         {showTransport && (
           <>
             <button

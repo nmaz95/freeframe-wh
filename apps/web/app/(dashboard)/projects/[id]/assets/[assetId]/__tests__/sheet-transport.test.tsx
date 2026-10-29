@@ -112,7 +112,10 @@ function openSheet() {
       <ReviewPage params={fulfilledParams} />
     </ToastProvider>,
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Open comments' }))
+  // On a portrait phone the sheet opens at `half` by itself; this is the
+  // state the transport tests need, so nothing to tap. (The button reads
+  // "Close comments" now; at `peek` it would read "Open comments".)
+  expect(screen.getByRole('button', { name: 'Close comments' })).toBeTruthy()
   const media = view.getByTestId('media') as HTMLMediaElement
   const play = vi.fn(() => Promise.resolve())
   media.play = play

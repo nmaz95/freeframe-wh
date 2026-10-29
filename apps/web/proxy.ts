@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { withBasePath } from './lib/base-path'
 
-const PUBLIC_ROUTES = ['/login', '/setup']
+// The manifest is fetched by the browser on its own, before any sign-in,
+// when someone adds the app to the home screen; behind the login redirect
+// the install got an HTML page as its manifest and failed.
+const PUBLIC_ROUTES = ['/login', '/setup', '/manifest.webmanifest']
 const PUBLIC_PREFIXES = ['/invite/', '/share/']
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'

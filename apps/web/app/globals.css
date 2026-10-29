@@ -182,10 +182,79 @@
 
   /* For an element positioned against an edge rather than padded away from it. */
   .bottom-safe { bottom: calc(var(--ff-bottom, 0px) + env(safe-area-inset-bottom)); }
+  .top-safe { top: calc(var(--ff-top, 0px) + env(safe-area-inset-top)); }
   .right-safe { right: calc(var(--ff-right, 0px) + env(safe-area-inset-right)); }
   .left-safe { left: calc(var(--ff-left, 0px) + env(safe-area-inset-left)); }
 
   .text-balance {
     text-wrap: balance;
   }
+
+  /* The phone shell's two materials.
+   *
+   * `ff-glass` is the light one, for floating chrome: the capsule header, the
+   * tab bar, the selection bar, the review transport. `ff-glass-heavy` is the
+   * darker, more opaque one for sheets and docked panels, which carry text and
+   * so need a calmer ground. Content never gets either: glass is the
+   * navigation layer, and a glass surface over another glass surface has
+   * nothing to refract.
+   *
+   * Blur stays at 20px. Safari pays for every blurred pixel on every frame,
+   * and above that the phone warms up and drops frames under a playing video.
+   * The 1px light edge at the top is what reads as thickness; the saturation
+   * boost is what keeps the colours of the media alive through the blur.
+   *
+   * Three system preferences override it. Reduce Transparency turns both into
+   * near-solid surfaces with the blur off (the blur is the cost, the
+   * translucency the complaint). Increase Contrast keeps them solid with a
+   * defined border. Both fall back cleanly where backdrop-filter is absent. */
+  .ff-glass,
+  .ff-glass-heavy {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+      0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+  .ff-glass {
+    background: rgba(32, 32, 42, 0.62);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+  }
+  .ff-glass-heavy {
+    background: rgba(17, 17, 23, 0.84);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    backdrop-filter: blur(20px) saturate(160%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      0 -18px 48px rgba(0, 0, 0, 0.55);
+  }
+  [data-theme="light"] .ff-glass {
+    background: rgba(255, 255, 255, 0.66);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.8),
+      0 8px 24px rgba(0, 0, 0, 0.12);
+  }
+  [data-theme="light"] .ff-glass-heavy {
+    background: rgba(248, 248, 250, 0.88);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 -18px 48px rgba(0, 0, 0, 0.14);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .ff-glass { background: var(--bg-elevated); }
+    .ff-glass-heavy { background: var(--bg-secondary); }
+  }
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    .ff-glass,
+    .ff-glass-heavy {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+    .ff-glass { background: var(--bg-elevated); }
+    .ff-glass-heavy { background: var(--bg-secondary); }
+  }
+
+  /* Room for the phone tab bar at the bottom of a scrolling page: its height
+   * plus the home-indicator inset. Zero wherever the bar is not rendered. */
+  .pb-tabbar { padding-bottom: calc(var(--ff-tabbar, 0px) + env(safe-area-inset-bottom)); }
 }

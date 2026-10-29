@@ -13,6 +13,7 @@ import { AssetMenuItems } from './menus/asset-menu'
 import { WithFolderMenu } from './menus/folder-menu'
 import { SelectionMenuItems, type SelectionActions } from './menus/selection-menu'
 import { ChangeStatusDropdown } from './menus/status-menu'
+import { useMobileShellStore } from '@/stores/mobile-shell-store'
 import { AppearancePopover } from './appearance-popover'
 import { SortPopover } from './sort-popover'
 import { MoveToDialog } from './move-to-dialog'
@@ -255,6 +256,15 @@ export function AssetGrid({
   }, [assets, folders])
 
   const totalSelected = selectedAssetIds.size + selectedFolderIds.size
+  // While the selection bar is up it stands where the phone tab bar stands,
+  // so the tab bar yields (see the mobile shell store). Released on the way
+  // out and on unmount, whichever comes first.
+  const claimTabBar = useMobileShellStore((s) => s.claimTabBar)
+  const selectionBarUp = !shareMode && totalSelected > 0
+  React.useEffect(() => {
+    if (!selectionBarUp) return
+    return claimTabBar()
+  }, [selectionBarUp, claimTabBar])
 
   // What the selection bar offers, shared with right-click on a selected item.
   const selectionActions: SelectionActions = {
@@ -457,7 +467,7 @@ export function AssetGrid({
 
       {/* ─── Navigator Bar (Frame.io style) ─────────────────────────────── */}
       {!shareMode && (
-        <div className="flex items-center gap-1 border-b border-border pb-2.5">
+        <div className="flex flex-wrap items-center gap-1 gap-y-2 border-b border-border pb-2.5">
           {/* Left group: Appearance + Fields + Sort */}
           <AppearancePopover />
 
@@ -467,9 +477,12 @@ export function AssetGrid({
 
           <div className="flex-1" />
 
-          {/* Right group: action buttons passed from parent */}
+          {/* Right group: action buttons passed from parent. The row wraps
+              rather than clips: on a phone the Share, New Folder and Upload
+              buttons used to run off the right edge, where no scroll reached
+              them. */}
           {actions && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 max-sm:w-full max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden max-sm:[&>*]:shrink-0">
               {actions}
             </div>
           )}
@@ -860,9 +873,10 @@ export function AssetGrid({
         </div>
       ) : null}
 
-      {/* Bottom selection action bar (Frame.io style) */}
+      {/* Bottom selection action bar (Frame.io style). On the phone shell it
+          takes the tab bar's place at the bottom edge, in the same glass. */}
       {!shareMode && totalSelected > 0 && (
-        <div className="sticky bottom-0 z-20 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-bg-elevated px-4 py-2.5 shadow-xl">
+        <div className="sticky bottom-0 z-20 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-bg-elevated px-4 py-2.5 shadow-xl max-md:fixed max-md:left-3 max-md:right-3 max-md:bottom-safe max-md:[--ff-bottom:0.625rem] max-md:z-30 max-md:ff-glass max-md:rounded-[24px] max-md:border-white/10 max-md:bg-transparent max-md:gap-x-2 max-md:px-3">
           <button onClick={clearSelection} aria-label="Clear selection" className="text-text-tertiary hover:text-text-primary transition-colors">
             <X className="h-4 w-4" />
           </button>
@@ -870,7 +884,7 @@ export function AssetGrid({
             {totalSelected} Item{totalSelected !== 1 ? 's' : ''} selected
           </span>
           {selectedTotalSize > 0 && (
-            <span className="text-xs text-text-tertiary whitespace-nowrap">
+            <span className="text-xs text-text-tertiary whitespace-nowrap max-md:hidden">
               &middot; {formatBytes(selectedTotalSize)}
             </span>
           )}
@@ -887,28 +901,28 @@ export function AssetGrid({
             <ChangeStatusDropdown statuses={selectionActions.statuses} onPick={selectionActions.onSetStatus} />
           )}
           {selectionActions.onSendToDrive && (
-            <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onSendToDrive}>
-              <CloudUpload className="h-4 w-4" /> Send to Drive
+            <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onSendToDrive} aria-label="Send to Drive" title="Send to Drive">
+              <CloudUpload className="h-4 w-4" /> <span className="max-md:hidden">Send to Drive</span>
             </Button>
           )}
           {selectionActions.onDelete && (
-            <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onDelete}>
-              <Trash2 className="h-4 w-4" /> Delete
+            <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onDelete} aria-label="Delete" title="Delete">
+              <Trash2 className="h-4 w-4" /> <span className="max-md:hidden">Delete</span>
             </Button>
           )}
           {selectionActions.onMove && (
-            <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onMove}>
-              <FolderInput className="h-4 w-4" /> Move to
+            <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onMove} aria-label="Move to" title="Move to">
+              <FolderInput className="h-4 w-4" /> <span className="max-md:hidden">Move to</span>
             </Button>
           )}
           {selectionActions.onShare && (
-            <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onShare}>
-              <Share2 className="h-4 w-4" /> Share
+            <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onShare} aria-label="Share" title="Share">
+              <Share2 className="h-4 w-4" /> <span className="max-md:hidden">Share</span>
             </Button>
           )}
           {selectionActions.onDownload && (
-            <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onDownload}>
-              <Download className="h-4 w-4" /> Download
+            <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onDownload} aria-label="Download" title="Download">
+              <Download className="h-4 w-4" /> <span className="max-md:hidden">Download</span>
             </Button>
           )}
         </div>

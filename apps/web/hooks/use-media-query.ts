@@ -6,6 +6,8 @@ import { useCallback, useSyncExternalStore } from 'react'
 export const MEDIA_MD = '(min-width: 768px)'
 /** Transport row: collapsed to 4 buttons + timecode below, full row above. */
 export const MEDIA_SM = '(min-width: 640px)'
+/** The project page's left column (folders, statuses) is rendered above. */
+export const MEDIA_LG = '(min-width: 1024px)'
 
 /**
  * One MediaQueryList per query string, shared by every caller. Without this,

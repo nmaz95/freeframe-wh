@@ -15,6 +15,7 @@ import { ArrowLeft, ChevronDown, Download, Loader2, PanelRightClose, PanelRightO
 import { useReview, type CreateCommentPayload } from '@/components/review/review-provider'
 import { useReviewStore } from '@/stores/review-store'
 import { MobileCommentSheet, PEEK_PX, type SheetState } from '@/components/review/mobile-comment-sheet'
+import { initialSheetState } from '@/components/review/sheet-state'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useMediaTransport } from '@/hooks/use-media-transport'
 import { formatTimecode } from '@/lib/utils'
@@ -118,7 +119,7 @@ function ShareReviewInner({
   const isWide = useMediaQuery('(min-width: 768px)')
   const isLandscape = useMediaQuery('(orientation: landscape)')
   const useSheet = !isWide && !isLandscape
-  const [sheetState, setSheetState] = React.useState<SheetState>('peek')
+  const [sheetState, setSheetState] = React.useState<SheetState>(() => initialSheetState(useSheet))
   const [sheetHeight, setSheetHeight] = React.useState(PEEK_PX)
   // One expression for the top-bar toggle's icon and its label, so the two
   // cannot disagree about whether the panel is up.
@@ -133,8 +134,12 @@ function ShareReviewInner({
   // short enough that the list was taking room the drawing surface needed.
   // Restored to `peek` on the way out rather than to whatever it was, so the
   // media is never left half covered by a sheet the user did not reopen.
+  // Only when drawing starts or stops, so `initialSheetState` survives the
+  // first paint (and StrictMode's second run of the effect in dev).
+  const drawingWas = React.useRef(isDrawingMode)
   React.useEffect(() => {
-    if (!useSheet) return
+    if (!useSheet || drawingWas.current === isDrawingMode) return
+    drawingWas.current = isDrawingMode
     setSheetState(isDrawingMode ? 'compose' : 'peek')
   }, [isDrawingMode, useSheet])
 

@@ -89,8 +89,9 @@ async function openOnPhone() {
   await waitFor(() => expect(view.container.querySelector('video')).not.toBeNull(), { timeout: 3000 })
   const video = view.container.querySelector('video') as HTMLVideoElement
   // At `peek` the player's own transport row is uncovered and the sheet shows
-  // none; one tap up to `half` and it covers that row and shows its own.
-  fireEvent.click(screen.getByRole('button', { name: 'Open comments' }))
+  // none; at `half`, where a portrait phone starts, it covers that row and
+  // shows its own. Nothing to tap: the sheet opens there by itself.
+  expect(screen.getByRole('button', { name: 'Close comments' })).toBeTruthy()
   const sheet = within(screen.getByTestId('mobile-comment-sheet'))
   return { video, sheet }
 }
