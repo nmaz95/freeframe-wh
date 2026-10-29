@@ -5,7 +5,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Check, ChevronDown, ChevronRight, CircleDot } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
-  MenuItem, MenuSub, MenuSubContent, MenuSubTrigger, menuContentClass, menuItemClass,
+  MenuItem, MenuSub, MenuSubContent, MenuSubTrigger, menuCollisionPadding, menuContentClass, menuItemClass,
   useAfterClose, useAfterCloseScheduler,
 } from '@/components/shared/item-menu'
 import { StatusDot } from '@/components/shared/status-badge'
@@ -111,6 +111,7 @@ export function ChangeStatusDropdown({
           align="end"
           side="top"
           sideOffset={6}
+          collisionPadding={menuCollisionPadding}
           className={menuContentClass}
           onCloseAutoFocus={onCloseAutoFocus}
         >
@@ -166,6 +167,7 @@ export function StatusDropdown({
         <DropdownMenu.Content
           align="start"
           sideOffset={6}
+          collisionPadding={menuCollisionPadding}
           className={menuContentClass}
           onCloseAutoFocus={onCloseAutoFocus}
         >

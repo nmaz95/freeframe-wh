@@ -1,99 +1,61 @@
 'use client'
 
 import * as React from 'react'
-import {
-  Bell,
-  AtSign,
-  UserCheck,
-  MessageSquare,
-  CheckCircle,
-  CircleDot,
-  CloudUpload,
-} from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Bell } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notification-store'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { formatRelativeTime } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/empty-state'
 import { cn } from '@/lib/utils'
-import { statusChangePayload, isBulkStatusChange, deliveryPayload } from '@/types'
-import type { Notification, NotificationType } from '@/types'
-
-const notificationIcons: Record<NotificationType, React.ElementType> = {
-  mention: AtSign,
-  assignment: UserCheck,
-  due_soon: UserCheck,
-  comment: MessageSquare,
-  approval: CheckCircle,
-  status_change: CircleDot,
-  delivery: CloudUpload,
-}
-
-const notificationLabels: Record<NotificationType, string> = {
-  mention: 'mentioned you',
-  assignment: 'assigned you to an asset',
-  due_soon: 'asset due soon',
-  comment: 'commented on an asset',
-  approval: 'updated approval status',
-  status_change: 'changed an asset\'s status',
-  delivery: 'sent an asset to Google Drive',
-}
+import { notificationTarget } from '@/lib/notification-target'
+import {
+  getNotificationText,
+  notificationIcons,
+  notificationIconClass,
+  notificationIconStyle,
+} from '@/components/layout/notification-text'
+import type { Notification } from '@/types'
 
 function NotificationItem({ notification }: { notification: Notification }) {
+  const router = useRouter()
   const { markAsRead } = useNotificationStore()
   const Icon = notificationIcons[notification.type]
+  const { title, subtitle } = getNotificationText(notification)
+
+  // The same words and the same destination as the drawer: this page is the
+  // phone shell's notification surface, where a drawer would cover the screen.
+  function handleClick() {
+    if (!notification.read) markAsRead(notification.id)
+    const target = notificationTarget(notification)
+    if (!target) return
+    if (target.kind === 'external') window.open(target.url, '_blank', 'noopener')
+    else router.push(target.href)
+  }
 
   return (
     <button
-      onClick={() => !notification.read && markAsRead(notification.id)}
+      onClick={handleClick}
       className={cn(
-        'flex w-full items-start gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-bg-hover',
+        'flex w-full items-start gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-bg-hover active:bg-bg-hover',
         !notification.read && 'bg-bg-secondary',
       )}
     >
       <div
-        className={cn(
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
-          notification.type === 'mention' && 'bg-accent-muted text-text-primary',
-          notification.type === 'approval' && 'bg-status-success/15 text-status-success',
-          notification.type === 'comment' && 'bg-bg-tertiary text-text-secondary',
-          (notification.type === 'assignment' || notification.type === 'due_soon') &&
-            'bg-status-warning/15 text-status-warning',
-          notification.type === 'status_change' && 'bg-bg-tertiary',
-          notification.type === 'delivery' &&
-            (deliveryPayload(notification)?.status === 'failed'
-              ? 'bg-status-error/15 text-status-error'
-              : 'bg-status-success/15 text-status-success'),
-        )}
-        style={
-          statusChangePayload(notification)?.status_color
-            ? { color: statusChangePayload(notification)!.status_color }
-            : undefined
-        }
+        className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full', notificationIconClass(notification))}
+        style={notificationIconStyle(notification)}
       >
         <Icon className="h-4 w-4" />
       </div>
 
       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-        <p className="text-sm text-text-primary">
-          {statusChangePayload(notification)
-            ? isBulkStatusChange(statusChangePayload(notification))
-              ? `${notification.actor_name ?? 'Someone'} moved ${statusChangePayload(notification)!.asset_count} assets to ${statusChangePayload(notification)!.status_name}`
-              : `${notification.actor_name ?? 'Someone'} moved ${notification.asset_name ?? 'an asset'} to ${statusChangePayload(notification)!.status_name}`
-            : deliveryPayload(notification)
-              ? deliveryPayload(notification)!.status === 'failed'
-                ? `Delivery of ${notification.asset_name ?? 'an asset'} failed`
-                : `${notification.asset_name ?? 'An asset'} delivered to ${deliveryPayload(notification)!.folder_name}`
-              : notificationLabels[notification.type]}
-        </p>
-        <p className="text-xs text-text-tertiary">
-          {formatRelativeTime(notification.created_at)}
-        </p>
+        <p className="text-sm text-text-primary font-medium">{title}</p>
+        {subtitle && <p className="text-xs text-text-secondary line-clamp-2">{subtitle}</p>}
+        <p className="text-xs text-text-tertiary">{formatRelativeTime(notification.created_at)}</p>
       </div>
 
-      {!notification.read && (
-        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
-      )}
+      {!notification.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" />}
     </button>
   )
 }
@@ -102,17 +64,21 @@ export default function NotificationsPage() {
   usePageTitle('Notifications')
   const { notifications, isLoading, fetchNotifications, markAllRead, unreadCount } =
     useNotificationStore()
+  const [tab, setTab] = React.useState<'all' | 'unread'>('all')
 
   React.useEffect(() => {
     fetchNotifications()
   }, [fetchNotifications])
 
+  const shown = tab === 'unread' ? notifications.filter((n) => !n.read) : notifications
+
   return (
-    <div className="p-6 max-w-3xl space-y-6">
-      {/* Header */}
+    <div className="p-6 max-md:px-4 max-md:pt-2 max-w-3xl space-y-5">
+      {/* Header. On the phone the capsule already says "Notifications", so
+          the title is kept for the desktop and the count for both. */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-text-primary">Notifications</h1>
+          <h1 className="text-lg font-semibold text-text-primary max-md:sr-only">Notifications</h1>
           {unreadCount > 0 && (
             <p className="text-sm text-text-secondary mt-0.5">
               {unreadCount} unread
@@ -126,6 +92,23 @@ export default function NotificationsPage() {
         )}
       </div>
 
+      <div role="tablist" aria-label="Notifications filter" className="flex gap-1 rounded-full bg-bg-secondary p-1 w-fit">
+        {(['all', 'unread'] as const).map((t) => (
+          <button
+            key={t}
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => setTab(t)}
+            className={cn(
+              'h-9 rounded-full px-4 text-sm font-medium transition-colors',
+              tab === t ? 'bg-bg-hover text-text-primary' : 'text-text-secondary',
+            )}
+          >
+            {t === 'all' ? 'All' : 'Unread'}
+          </button>
+        ))}
+      </div>
+
       {/* Notifications List */}
       {isLoading ? (
         <div className="space-y-1">
@@ -136,15 +119,15 @@ export default function NotificationsPage() {
             />
           ))}
         </div>
-      ) : notifications.length === 0 ? (
+      ) : shown.length === 0 ? (
         <EmptyState
           icon={Bell}
-          title="No Updates Yet"
-          description="New activity on your account will show here."
+          title={tab === 'unread' ? 'All caught up' : 'No Updates Yet'}
+          description={tab === 'unread' ? 'Nothing unread.' : 'New activity on your account will show here.'}
         />
       ) : (
         <div className="space-y-0.5">
-          {notifications.map((notification) => (
+          {shown.map((notification) => (
             <NotificationItem
               key={notification.id}
               notification={notification}

@@ -1,72 +1,15 @@
 'use client'
 
 import * as React from 'react'
-import {
-  Bell,
-  AtSign,
-  UserCheck,
-  MessageSquare,
-  CheckCircle,
-  CircleDot,
-  CloudUpload,
-  X,
-  Settings,
-} from 'lucide-react'
+import { Bell, X, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { withBasePath } from '@/lib/base-path'
 import { useNotificationStore } from '@/stores/notification-store'
 import { formatRelativeTime } from '@/lib/utils'
 import { cn } from '@/lib/utils'
-import { statusChangePayload, isBulkStatusChange, deliveryPayload } from '@/types'
-import type { Notification, NotificationType } from '@/types'
-
-const notificationIcons: Record<NotificationType, React.ElementType> = {
-  mention: AtSign,
-  assignment: UserCheck,
-  due_soon: UserCheck,
-  comment: MessageSquare,
-  approval: CheckCircle,
-  status_change: CircleDot,
-  delivery: CloudUpload,
-}
-
-function getNotificationText(n: Notification): { title: string; subtitle: string | null } {
-  const actor = n.actor_name ? (n.actor_is_guest ? `${n.actor_name} (guest)` : n.actor_name) : 'Someone'
-  const asset = n.asset_name || 'an asset'
-  switch (n.type) {
-    case 'mention':
-      return { title: `${actor} mentioned you on ${asset}`, subtitle: n.comment_preview || null }
-    case 'comment':
-      return { title: `${actor} commented on ${asset}`, subtitle: n.comment_preview || null }
-    case 'assignment':
-      return { title: `${actor} assigned you to ${asset}`, subtitle: null }
-    case 'approval':
-      return { title: `${actor} updated approval on ${asset}`, subtitle: null }
-    case 'due_soon':
-      return { title: `${asset} is due soon`, subtitle: null }
-    case 'status_change': {
-      const p = statusChangePayload(n)
-      const to = p?.status_name ?? 'a new status'
-      if (p && isBulkStatusChange(p)) {
-        const names = p.asset_names ?? []
-        const more = (p.asset_count ?? 0) - names.length
-        const subtitle = names.length ? names.join(', ') + (more > 0 ? `, and ${more} more` : '') : null
-        return { title: `${actor} moved ${p.asset_count} assets to ${to}`, subtitle }
-      }
-      const from = p?.from_status_name
-      return { title: `${actor} moved ${asset} to ${to}`, subtitle: from ? `was ${from}` : null }
-    }
-    case 'delivery': {
-      const p = deliveryPayload(n)
-      if (p?.status === 'failed') {
-        return { title: `Delivery of ${asset} failed`, subtitle: p.error ?? null }
-      }
-      return { title: `${asset} delivered to ${p?.folder_name ?? 'Google Drive'}`, subtitle: p?.file_name ?? null }
-    }
-    default:
-      return { title: 'New notification', subtitle: null }
-  }
-}
+import { notificationTarget } from '@/lib/notification-target'
+import { getNotificationText, notificationIcons, notificationIconClass, notificationIconStyle } from './notification-text'
+import type { Notification } from '@/types'
 
 function NotificationItem({ notification, onClose }: { notification: Notification; onClose: () => void }) {
   const { markAsRead } = useNotificationStore()
@@ -75,28 +18,11 @@ function NotificationItem({ notification, onClose }: { notification: Notificatio
 
   function handleClick() {
     if (!notification.read) markAsRead(notification.id)
-    // A finished delivery opens the file on Drive.
-    const delivery = deliveryPayload(notification)
-    if (delivery?.status === 'done' && delivery.web_view_link) {
-      window.open(delivery.web_view_link, '_blank', 'noopener')
-      onClose()
-      return
-    }
-    // A grouped status change opens the project filtered on that status.
-    const bulk = statusChangePayload(notification)
-    if (bulk && isBulkStatusChange(bulk) && notification.project_id) {
-      window.location.href = withBasePath(`/projects/${notification.project_id}?status=${bulk.status_id}`)
-      onClose()
-      return
-    }
-    // Navigate to asset if possible
-    if (notification.project_id && notification.asset_id) {
-      const qs = notification.comment_id ? `?commentId=${notification.comment_id}` : ''
-      window.location.href = withBasePath(
-        `/projects/${notification.project_id}/assets/${notification.asset_id}${qs}`,
-      )
-      onClose()
-    }
+    const target = notificationTarget(notification)
+    if (!target) return
+    if (target.kind === 'external') window.open(target.url, '_blank', 'noopener')
+    else window.location.href = withBasePath(target.href)
+    onClose()
   }
 
   return (
@@ -108,25 +34,8 @@ function NotificationItem({ notification, onClose }: { notification: Notificatio
       )}
     >
       <div
-        className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full mt-0.5',
-          notification.type === 'mention' && 'bg-accent-muted text-text-primary',
-          notification.type === 'approval' && 'bg-status-success/15 text-status-success',
-          notification.type === 'comment' && 'bg-bg-tertiary text-text-secondary',
-          (notification.type === 'assignment' || notification.type === 'due_soon') &&
-            'bg-status-warning/15 text-status-warning',
-          notification.type === 'status_change' && 'bg-bg-tertiary',
-          notification.type === 'delivery' &&
-            (deliveryPayload(notification)?.status === 'failed'
-              ? 'bg-status-error/15 text-status-error'
-              : 'bg-status-success/15 text-status-success'),
-        )}
-        // A status change wears its status's colour, which is not a theme token.
-        style={
-          statusChangePayload(notification)?.status_color
-            ? { color: statusChangePayload(notification)!.status_color }
-            : undefined
-        }
+        className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-full mt-0.5', notificationIconClass(notification))}
+        style={notificationIconStyle(notification)}
       >
         <Icon className="h-3.5 w-3.5" />
       </div>
@@ -190,6 +99,9 @@ export function NotificationDrawer({ open, onClose, railCollapsed, fullWidth = f
           !railCollapsed && !fullWidth && 'md:[--ff-left:220px]',
         )}
       >
+        {/* The status bar's band, in the drawer's own colour (standalone on a
+            phone draws the page under it). Zero height anywhere else. */}
+        <div aria-hidden="true" className="pt-safe shrink-0" />
         {/* Header */}
         <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
           <span className="text-sm font-semibold text-text-primary">Notifications</span>

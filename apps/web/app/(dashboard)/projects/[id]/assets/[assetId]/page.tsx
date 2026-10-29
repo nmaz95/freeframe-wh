@@ -654,6 +654,10 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
         statusFor={statusFor}
         onMoveToStatus={(targets, s) => applyStatus(targets[0], s)}
       />
+      {/* The status bar's band on a phone that runs the app standalone: the
+          page draws under the status bar there, so the bar's colour fills the
+          inset and the controls start below it. Zero height everywhere else. */}
+      <div aria-hidden="true" className="pt-safe shrink-0 bg-bg-secondary" />
       {/* ─── Top bar (Frame.io style) ──────────────────────────────────── */}
       <div className="flex items-center justify-between border-b border-border px-3 h-12 bg-bg-secondary shrink-0">
         {/* Left: back + breadcrumb. The name is the first thing the bar gives

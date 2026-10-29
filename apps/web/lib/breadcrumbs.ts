@@ -21,6 +21,14 @@ function isUuid(s: string): boolean {
  */
 const SKIP_SEGMENTS = new Set(['assets', 'collections'])
 
+/**
+ * Segments that name a section but have no page of their own: `/settings`
+ * only redirects to a tab (Admin for a superadmin). Their crumb keeps the
+ * label and an empty href, which the desktop header renders as plain text and
+ * the phone header skips when it looks for the way back.
+ */
+const CONTAINER_SEGMENTS = new Set(['settings'])
+
 export function buildBreadcrumbs(
   pathname: string,
   dynamicLabels: Record<string, string>,
@@ -40,7 +48,7 @@ export function buildBreadcrumbs(
       dynamicLabels[segment] ??
       LABEL_MAP[segment] ??
       segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ')
-    crumbs.push({ label, href: hrefs[segment] ?? path })
+    crumbs.push({ label, href: hrefs[segment] ?? (CONTAINER_SEGMENTS.has(segment) ? '' : path) })
   }
 
   return crumbs

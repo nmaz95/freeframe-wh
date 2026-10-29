@@ -64,7 +64,16 @@ export function useAfterClose() {
 }
 
 export const menuContentClass =
-  'z-[100] min-w-[200px] rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95'
+  'z-[100] min-w-[200px] rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto'
+
+/**
+ * How far a floating menu keeps from the viewport's edges. The top and the
+ * bottom are the phone shell's bands: the status bar plus the capsule header
+ * above, the home indicator plus the tab bar below. Radix measures the room
+ * left after this, so a long menu on a short screen (a phone sideways, an
+ * unfolded one) shrinks and scrolls instead of flipping up and off the top.
+ */
+export const menuCollisionPadding = { top: 72, bottom: 96, left: 8, right: 8 }
 
 export const menuItemClass =
   'flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary data-[highlighted]:bg-bg-hover data-[highlighted]:text-text-primary data-[disabled]:opacity-50 data-[disabled]:pointer-events-none cursor-pointer outline-none transition-colors'
@@ -187,6 +196,7 @@ export function DotsMenu({
         <DropdownMenu.Content
           align={align}
           sideOffset={4}
+          collisionPadding={menuCollisionPadding}
           className={menuContentClass}
           onClick={stopPropagation}
           onContextMenu={swallowContextMenu}

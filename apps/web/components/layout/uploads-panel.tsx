@@ -821,7 +821,7 @@ export function UploadsPanel({
           for the same reason as the panel's offset below. */}
       <div
         className={cn(
-          'fixed top-0 right-0 bottom-0 left-[52px] z-40',
+          'fixed top-0 right-0 bottom-0 left-[52px] z-40 max-md:left-0',
           !railCollapsed && 'md:left-[220px]',
         )}
         onClick={() => setPanelOpen(false)}
@@ -851,7 +851,9 @@ export function UploadsPanel({
         // below `md` the panel stays where a collapsed rail puts it.
         className={cn(
           'fixed left-safe top-0 z-50 h-dvh w-[380px]',
-          '[--ff-left:52px]',
+          // The phone shell has no rail: the panel opens from the screen's own
+          // edge and takes the width, up to a phablet's worth.
+          '[--ff-left:52px] max-md:[--ff-left:0px] max-md:w-full max-md:max-w-[420px]',
           !railCollapsed && 'md:[--ff-left:220px]',
           'border-r border-border bg-bg-secondary shadow-2xl flex flex-col pb-safe animate-in slide-in-from-left-4 duration-150',
         )}
@@ -862,6 +864,8 @@ export function UploadsPanel({
           if (carriesFiles(e)) setPanelOpen(false)
         }}
       >
+        {/* The status bar's band on a phone running the app standalone. */}
+        <div aria-hidden="true" className="pt-safe shrink-0 bg-bg-secondary" />
         {/* Header */}
         <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
           {/* Focusable by script only: where focus goes when the button it was on goes away. */}

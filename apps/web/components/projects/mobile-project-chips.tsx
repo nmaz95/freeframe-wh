@@ -2,9 +2,9 @@
 
 import * as React from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { Check, ChevronDown, Folder } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Folder } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { menuContentClass, menuItemClass } from '@/components/shared/item-menu'
+import { menuCollisionPadding, menuContentClass, menuItemClass } from '@/components/shared/item-menu'
 import { StatusDot } from '@/components/shared/status-badge'
 import type { AssetStatusDef, FolderTreeNode } from '@/types'
 
@@ -25,16 +25,42 @@ interface FlatFolder {
   id: string
   name: string
   depth: number
+  hasChildren: boolean
 }
 
-/** The tree as the rows of one menu, parents before children, indented by depth. */
+/** The whole tree as rows, parents before children, indented by depth. */
 export function flattenFolders(tree: FolderTreeNode[], depth = 0): FlatFolder[] {
   const out: FlatFolder[] = []
   for (const node of tree) {
-    out.push({ id: node.id, name: node.name, depth })
+    out.push({ id: node.id, name: node.name, depth, hasChildren: node.children.length > 0 })
     if (node.children.length > 0) out.push(...flattenFolders(node.children, depth + 1))
   }
   return out
+}
+
+/** The rows the menu shows: the first level, plus the children of every
+ *  folder in `expanded`. Subfolders open by hand, one level at a time. */
+export function visibleFolders(tree: FolderTreeNode[], expanded: ReadonlySet<string>, depth = 0): FlatFolder[] {
+  const out: FlatFolder[] = []
+  for (const node of tree) {
+    out.push({ id: node.id, name: node.name, depth, hasChildren: node.children.length > 0 })
+    if (node.children.length > 0 && expanded.has(node.id)) out.push(...visibleFolders(node.children, expanded, depth + 1))
+  }
+  return out
+}
+
+/** The ids on the path from the root to `folderId`, the folder itself excluded. */
+export function ancestorsOf(tree: FolderTreeNode[], folderId: string | null): string[] {
+  return (folderId && pathTo(tree, folderId, [])) || []
+}
+
+function pathTo(tree: FolderTreeNode[], folderId: string, trail: string[]): string[] | null {
+  for (const node of tree) {
+    if (node.id === folderId) return trail
+    const found = pathTo(node.children, folderId, [...trail, node.id])
+    if (found) return found
+  }
+  return null
 }
 
 const chipClass =
@@ -63,9 +89,30 @@ export function MobileProjectChips({
   onStatusFilter,
   className,
 }: MobileProjectChipsProps) {
-  const folders = React.useMemo(() => flattenFolders(tree), [tree])
-  const current = folders.find((f) => f.id === currentFolderId)
+  const all = React.useMemo(() => flattenFolders(tree), [tree])
+  const current = all.find((f) => f.id === currentFolderId)
   const total = Object.values(counts).reduce((a, b) => a + b, 0)
+  // The current folder's ancestors start open, so it is in view; the rest of
+  // the tree stays folded until tapped. Reset when the folder changes.
+  const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set(ancestorsOf(tree, currentFolderId)))
+  const [seenFolder, setSeenFolder] = React.useState(currentFolderId)
+  if (seenFolder !== currentFolderId) {
+    setSeenFolder(currentFolderId)
+    setExpanded(new Set(ancestorsOf(tree, currentFolderId)))
+  }
+  const folders = visibleFolders(tree, expanded)
+  // Which folder's chevron the pointer went down on. Radix fires the item's
+  // `onSelect` for any click inside the item (it synthesises one on pointer
+  // up), so the chevron cannot be told apart there by the event alone: the
+  // flag turns that select into an expand and keeps the menu open.
+  const expandIntent = React.useRef<string | null>(null)
+  const toggle = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   return (
     <div
@@ -81,7 +128,16 @@ export function MobileProjectChips({
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content align="start" sideOffset={6} className={cn(menuContentClass, 'max-h-[60vh] overflow-y-auto')}>
+          <DropdownMenu.Content
+            align="start"
+            sideOffset={6}
+            // Always below the chip. With the content capped at the room left
+            // under it (menuContentClass), a long tree scrolls there instead
+            // of flipping up and off the top of a short, sideways screen.
+            avoidCollisions={false}
+            collisionPadding={menuCollisionPadding}
+            className={cn(menuContentClass, 'min-w-[240px]')}
+          >
             <DropdownMenu.Item
               className={menuItemClass}
               onSelect={() => onSelectFolder(null)}
@@ -93,14 +149,42 @@ export function MobileProjectChips({
             {folders.map((f) => (
               <DropdownMenu.Item
                 key={f.id}
-                className={menuItemClass}
-                onSelect={() => onSelectFolder(f.id)}
+                className={cn(menuItemClass, 'pr-1')}
+                onSelect={(e) => {
+                  if (expandIntent.current === f.id) {
+                    e.preventDefault()
+                    expandIntent.current = null
+                    toggle(f.id)
+                    return
+                  }
+                  onSelectFolder(f.id)
+                }}
                 aria-current={f.id === currentFolderId ? 'true' : undefined}
                 style={{ paddingLeft: `${10 + f.depth * 14}px` }}
               >
                 <span className="w-4 shrink-0">{f.id === currentFolderId && <Check className="h-4 w-4" />}</span>
                 <Folder className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />
-                <span className="truncate">{f.name}</span>
+                <span className="truncate flex-1">{f.name}</span>
+                {f.hasChildren && (
+                  // Opens the level below without picking the folder or closing
+                  // the menu (see `expandIntent`). A presentational control:
+                  // the item's own select carries the action.
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    aria-label={expanded.has(f.id) ? `Collapse ${f.name}` : `Expand ${f.name}`}
+                    aria-expanded={expanded.has(f.id)}
+                    // No preventDefault here: Radix composes the item's own click
+                    // handler to skip a default-prevented event, which is how
+                    // the first version of this never reached `onSelect`.
+                    onPointerDown={() => {
+                      expandIntent.current = f.id
+                    }}
+                    className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-tertiary hover:bg-bg-hover hover:text-text-primary"
+                  >
+                    <ChevronRight className={cn('h-4 w-4 transition-transform', expanded.has(f.id) && 'rotate-90')} />
+                  </button>
+                )}
               </DropdownMenu.Item>
             ))}
           </DropdownMenu.Content>

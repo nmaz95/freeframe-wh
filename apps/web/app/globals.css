@@ -177,6 +177,9 @@
    * would otherwise remove it. */
   .pb-safe { padding-bottom: max(var(--ff-pb, 0px), env(safe-area-inset-bottom)); }
   .pt-safe { padding-top: max(var(--ff-pt, 0px), env(safe-area-inset-top)); }
+  /* The sum rather than the max: for content that starts below chrome that
+   * is itself placed below the inset (the phone's capsule header). */
+  .pt-safe-plus { padding-top: calc(var(--ff-pt, 0px) + env(safe-area-inset-top)); }
   .pl-safe { padding-left: max(var(--ff-pl, 0px), env(safe-area-inset-left)); }
   .pr-safe { padding-right: max(var(--ff-pr, 0px), env(safe-area-inset-right)); }
 

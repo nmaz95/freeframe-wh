@@ -392,7 +392,8 @@ export function CompareOverlay({ asset, versions, rightVersion, onClose, canComm
   const badgeB = `v${right.version_number}`
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-bg-primary">
+    <div className="fixed inset-0 z-50 flex flex-col bg-bg-primary pl-safe pr-safe">
+      <div aria-hidden="true" className="pt-safe shrink-0 bg-bg-primary" />
       {/* Top bar — minimalist chrome only */}
       <div className="flex items-center gap-3 border-b border-border px-4 py-2">
         <div className="shrink-0">

@@ -100,7 +100,7 @@ export default function DashboardLayout({
             "relative flex-1 overflow-y-auto",
             // The page scrolls under the floating chrome, so it starts below
             // the capsule and ends above the tab bar. Only on the phone shell.
-            !isAssetViewer && "max-md:pt-safe max-md:[--ff-pt:4.5rem] max-md:pb-tabbar max-md:[--ff-tabbar:5rem]",
+            !isAssetViewer && "max-md:pt-safe-plus max-md:[--ff-pt:4.5rem] max-md:pb-tabbar max-md:[--ff-tabbar:5rem]",
           )}
         >
           {children}
@@ -109,7 +109,7 @@ export default function DashboardLayout({
 
       {!isAssetViewer && (
         <div className="md:hidden" style={{ ["--ff-tabbar" as string]: `${TAB_BAR_PX}px` }}>
-          <MobileTabBar onSearchOpen={() => setCommandOpen(true)} />
+          <MobileTabBar onSearchOpen={() => setCommandOpen(true)} searchOpen={commandOpen} />
         </div>
       )}
 

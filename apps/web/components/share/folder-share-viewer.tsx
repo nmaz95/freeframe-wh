@@ -846,7 +846,8 @@ export function FolderShareViewer({
   }
 
   return (
-    <div className="flex-1 min-h-screen flex flex-col bg-bg-primary text-text-primary">
+    <div className="flex-1 min-h-screen flex flex-col bg-bg-primary text-text-primary pl-safe pr-safe">
+      <div aria-hidden="true" className="pt-safe shrink-0 bg-bg-secondary" />
       {/* ─── Top Bar (Frame.io style) ─────────────────────────────────── */}
       <header className="flex items-center justify-between border-b border-border px-4 h-12 bg-bg-secondary shrink-0">
         {/* Left: viewer profile + breadcrumb */}

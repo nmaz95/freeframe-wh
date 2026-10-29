@@ -32,6 +32,13 @@ describe('MobileHeader', () => {
     expect(screen.getByRole('link', { name: 'Back to Projects' })).toHaveAttribute('href', '/projects')
   })
 
+  it('goes back to Projects from a settings tab, skipping the section that only redirects', () => {
+    nav.pathname = '/settings/profile'
+    render(<MobileHeader onSearchOpen={() => {}} />)
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Profile')
+    expect(screen.getByRole('link', { name: 'Back to Projects' })).toHaveAttribute('href', '/projects')
+  })
+
   it('renders a page’s row inside the capsule through the slot', () => {
     nav.pathname = '/projects'
     render(

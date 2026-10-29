@@ -60,7 +60,10 @@ export function MobileHeader({ onSearchOpen }: MobileHeaderProps) {
     ...extraCrumbs.map((c) => ({ label: c.label, href: c.href ?? '' })),
   ]
   const current = crumbs[crumbs.length - 1]
-  const parent = crumbs.length > 1 ? crumbs[crumbs.length - 2] : null
+  // The way back is the nearest earlier crumb that is a page. A section crumb
+  // with no href (Settings) is skipped: from Settings › Profile the arrow goes
+  // to Projects, not to a redirect that lands on the Admin tab.
+  const parent = crumbs.length > 1 ? (crumbs.slice(0, -1).reverse().find((c) => c.href) ?? { label: 'Projects', href: '/projects' }) : null
   const trail = crumbs.length > 2 ? crumbs.slice(0, -1).map((c) => c.label).join(' › ') : null
 
   return (
@@ -69,7 +72,7 @@ export function MobileHeader({ onSearchOpen }: MobileHeaderProps) {
       className="ff-glass pointer-events-auto flex flex-col rounded-[26px] border border-white/10 px-1.5 pb-1.5"
     >
       <div className="flex h-[52px] items-center gap-0.5">
-        {parent && parent.href ? (
+        {parent ? (
           <Link
             href={parent.href}
             aria-label={`Back to ${parent.label}`}

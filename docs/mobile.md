@@ -22,11 +22,13 @@ serve a stale build after a deploy.
 
 Below `md` the rail and the header give way to:
 
-- **A tab bar** along the bottom edge: Projects, Search (the command palette),
-  Uploads (raised, in the accent colour; the uploads panel with the count of
-  files on their way), Notifications (with the unread count; opens the drawer
-  full width) and Profile. It steps aside while the asset grid's selection bar
-  is up, so the two never stack.
+- **A tab bar** along the bottom edge: Search (the command palette), Projects
+  (the centre stop, raised, in the accent colour), Notifications (with the
+  unread count; opens the Notifications page, not the rail's drawer) and
+  Profile. A pill slides to the current stop as the route changes. It steps
+  aside while the asset grid's selection bar is up, so the two never stack.
+  Uploads are started from the project page; the uploads panel opens by itself
+  when one starts, full width on a phone.
 - **A capsule header** floating over the page: the current page's name (the
   last breadcrumb), the way back, and search. On a project page the capsule
   also carries the **folder and status chips**: a menu of the whole folder tree
@@ -41,6 +43,27 @@ Below `md` the rail and the header give way to:
   heavier glass, with a grabber; it still drops to its peek band on a swipe
   down. A landscape phone keeps comments beside the media, as before.
 - **The share pages** get the same sheet behaviour for a client on a phone.
+- **Settings** show their tabs as a row of chips above the page instead of the
+  224px column. The capsule's back arrow skips a section that only redirects
+  (Settings lands on the Admin tab for a superadmin) and goes to Projects.
+- **Menus stay on the screen.** Dropdowns are capped at the room left below
+  their trigger and scroll there, with the status bar and the tab bar bands
+  kept clear; the folder menu opens on the first level and each subfolder
+  level opens from its chevron.
+- **Under the status bar.** The app runs under the status bar when installed
+  (`black-translucent`), so every surface anchored to the top edge (the review
+  and share top bars, the notification drawer, the uploads panel, the compare
+  overlay) starts with a band the height of `env(safe-area-inset-top)` in its
+  own colour.
+
+## Sizing against real devices
+
+Open `/device` on the phone (no link leads there): it shows the viewport in
+CSS px, the scale, the orientation, the four safe-area insets, whether the
+app runs standalone, and the user agent, with a Copy button. Rotate the phone
+and read it again. Those numbers, not data sheets, are what the shell is
+checked against (the Playwright audit in the repo's scratch tooling emulates
+them by overriding the `*-safe` utilities).
 
 ## The materials
 
