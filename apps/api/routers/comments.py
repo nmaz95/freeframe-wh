@@ -17,6 +17,7 @@ from ..config import settings
 from ..database import get_db
 from ..middleware.auth import get_current_user, get_optional_user
 from ..middleware.share_auth import get_share_link
+from ..services.push_service import notify_push
 from ..services import event_service
 from ..models.asset import Asset, AssetType, AssetVersion, MediaFile, ProcessingStatus
 from ..models.project import ProjectMember, ProjectRole
@@ -383,25 +384,29 @@ def _notify_parent_author_about_reply(
     reply: Comment,
     asset: Asset,
     replier_id: Optional[uuid.UUID],
-) -> None:
-    """Notify a parent author only while they can still access the asset."""
+) -> Optional[Notification]:
+    """Notify a parent author only while they can still access the asset.
+    Returns the row, so the caller can push it after its commit."""
     if not parent or not parent.author_id or parent.author_id == replier_id:
-        return
+        return None
 
     parent_author = db.query(User).filter(User.id == parent.author_id).first()
     if not parent_author or not can_access_asset(db, asset, parent_author):
-        return
+        return None
 
-    db.add(Notification(
+    note = Notification(
         user_id=parent.author_id,
         type=NotificationType.comment,
         asset_id=asset.id,
         comment_id=reply.id,
-    ))
+    )
+    db.add(note)
+    return note
 
 
-def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str, author_name: str, mention_user_ids: list | None = None) -> None:
-    """Create Mention + Notification records and send emails.
+def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str, author_name: str, mention_user_ids: list | None = None) -> list[Notification]:
+    """Create Mention + Notification records and send emails. Returns the
+    notification rows, so the caller can push them after its commit.
     Uses explicit mention_user_ids if provided, else falls back to parsing @email from body."""
     from ..services.auth_service import get_user_by_email
     from ..config import settings
@@ -427,6 +432,7 @@ def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str, aut
     # name, the asset name, and a comment preview emailed to someone with no access to either.
     mentioned_users = [u for u in mentioned_users if can_access_asset(db, asset, u)]
 
+    notes: list[Notification] = []
     for user in mentioned_users:
         mention = Mention(comment_id=comment.id, mentioned_user_id=user.id)
         db.add(mention)
@@ -437,6 +443,7 @@ def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str, aut
             comment_id=comment.id,
         )
         db.add(notif)
+        notes.append(notif)
 
         asset_link = f"{settings.frontend_url}/projects/{asset.project_id}/assets/{asset.id}"
         send_task_safe(send_mention_email,
@@ -446,6 +453,7 @@ def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str, aut
             comment_preview=body[:200],
             asset_link=asset_link,
         )
+    return notes
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
@@ -528,16 +536,18 @@ def create_comment(
         )
         db.add(annotation)
 
-    _create_mentions(db, comment, asset, body.body, current_user.name, body.mention_user_ids)
+    notes = _create_mentions(db, comment, asset, body.body, current_user.name, body.mention_user_ids)
 
     # Notify asset creator about the comment (unless they're the commenter)
     if asset.created_by and asset.created_by != current_user.id:
-        db.add(Notification(
+        note = Notification(
             user_id=asset.created_by,
             type=NotificationType.comment,
             asset_id=asset_id,
             comment_id=comment.id,
-        ))
+        )
+        db.add(note)
+        notes.append(note)
 
     # Activity log
     activity = ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.commented)
@@ -545,6 +555,7 @@ def create_comment(
 
     db.commit()
     db.refresh(comment)
+    notify_push(db, notes)
 
     event_service.publish_sync(asset.project_id, "new_comment", {
         "asset_id": str(asset_id),
@@ -602,12 +613,13 @@ def reply_to_comment(
             carousel_position=body.annotation.carousel_position,
         ))
 
-    _create_mentions(db, reply, asset, body.body, current_user.name, body.mention_user_ids)
+    notes = _create_mentions(db, reply, asset, body.body, current_user.name, body.mention_user_ids)
 
-    _notify_parent_author_about_reply(db, parent, reply, asset, current_user.id)
+    notes.append(_notify_parent_author_about_reply(db, parent, reply, asset, current_user.id))
 
     db.commit()
     db.refresh(reply)
+    notify_push(db, notes)
 
     event_service.publish_sync(asset.project_id, "new_comment", {
         "asset_id": str(asset_id),
@@ -1228,6 +1240,7 @@ def guest_comment(
     db.flush()
 
     # Parse mentions (guest can mention registered users)
+    notes: list[Optional[Notification]] = []
     emails = _parse_mentions(body.body)
     for email in set(emails):
         from ..services.auth_service import get_user_by_email
@@ -1243,8 +1256,9 @@ def guest_comment(
                 comment_id=comment.id,
             )
             db.add(notif)
+            notes.append(notif)
 
-    _notify_parent_author_about_reply(db, parent, comment, asset, author_id)
+    notes.append(_notify_parent_author_about_reply(db, parent, comment, asset, author_id))
 
     if body.annotation:
         annotation = Annotation(
@@ -1257,6 +1271,7 @@ def guest_comment(
 
     db.commit()
     db.refresh(comment)
+    notify_push(db, notes)
 
     # Log share link activity
     actor_email = current_user.email if current_user else (body.guest_email or "anonymous")

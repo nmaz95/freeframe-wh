@@ -133,3 +133,9 @@ def test_every_beat_scheduled_task_is_registered():
     scheduled = {entry["task"] for entry in celery_app.conf.beat_schedule.values()}
     unknown = scheduled - registered
     assert not unknown, f"beat schedules unregistered task(s): {sorted(unknown)}"
+
+
+def test_push_rides_the_low_priority_email_queue():
+    """Web Push shares email_worker's queue by design; a move to `default`,
+    which nothing consumes, would silently drop every push."""
+    assert effective_queue("apps.api.tasks.push_tasks.send_push_notification") == "email_low"

@@ -5,7 +5,11 @@ import { withBasePath } from './lib/base-path'
 // The manifest is fetched by the browser on its own, before any sign-in,
 // when someone adds the app to the home screen; behind the login redirect
 // the install got an HTML page as its manifest and failed.
-const PUBLIC_ROUTES = ['/login', '/setup', '/manifest.webmanifest']
+// The service worker script is fetched by the browser itself, on registration
+// and on its own update checks, with no promise that the app's cookies come
+// along; behind the login redirect it would get an HTML page and fail to
+// install. It carries no data of its own (public/sw.js).
+const PUBLIC_ROUTES = ['/login', '/setup', '/manifest.webmanifest', '/sw.js']
 const PUBLIC_PREFIXES = ['/invite/', '/share/']
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'

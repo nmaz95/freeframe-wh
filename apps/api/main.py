@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
-from .routers import auth, users, projects, upload, events, assets, me, comments, approvals, share, metadata, branding, instance_branding, notifications, admin, setup, folders, hls_proxy, instance_settings, statuses, integrations
+from .routers import auth, users, projects, upload, events, assets, me, comments, approvals, share, metadata, branding, instance_branding, notifications, admin, setup, folders, hls_proxy, instance_settings, statuses, integrations, push
 from .services.s3_service import run_startup_bucket_setup
 from .services.email_service import mail_is_configured
 from .middleware.global_rate_limit import GlobalRateLimitMiddleware
@@ -126,6 +126,7 @@ app.include_router(instance_settings.router)
 app.include_router(instance_branding.router)
 app.include_router(statuses.router)
 app.include_router(integrations.router)
+app.include_router(push.router)
 
 @app.get("/health")
 def health():

@@ -18,9 +18,10 @@ export const PWA_THEME_COLOR = '#0d0d10'
  * generated icons under /icons are the product's own and stay as the sizes
  * Android needs (192, 512 and a maskable 512 with the safe-zone padding).
  *
- * No service worker goes with it on purpose: nothing here works offline, and
- * a cached app shell would serve a stale build after every deploy. Chrome has
- * not required one for installation since 2024, and iOS never did.
+ * The service worker that goes with it (public/sw.js) handles push
+ * notifications and nothing else: no fetch handler, no cache, so a stale app
+ * shell after a deploy cannot happen. Installation itself needs none: Chrome
+ * has not required one since 2024, and iOS never did.
  */
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const branding = await getServerBranding()

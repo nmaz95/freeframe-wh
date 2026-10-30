@@ -92,10 +92,11 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   // the little height there is.
   const isWide = useMediaQuery('(min-width: 768px)')
   const isLandscape = useMediaQuery('(orientation: landscape)')
-  // Below `sm` the status and the navigator leave the title row for a row of
-  // their own. Decided here, not by a hidden class, so each exists once in
-  // the document at any width.
-  const isSmUp = useMediaQuery('(min-width: 640px)')
+  // Below `md` the status leaves the title row for a row of its own: between
+  // 640 and 767px (a folded phone held sideways) the pill still overran the
+  // navigator. Decided here, not by a hidden class, so it exists once in the
+  // document at any width.
+  const isSmUp = useMediaQuery('(min-width: 768px)')
   const useSheet = !isWide && !isLandscape
   const [sheetState, setSheetState] = useState<SheetState>(() => initialSheetState(useSheet))
   const [sheetHeight, setSheetHeight] = useState(PEEK_PX)
@@ -780,9 +781,10 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
               onClick={() => setDeliverOpen(true)}
               className="hidden sm:inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border text-xs text-text-primary hover:border-border-focus transition-colors"
               title="Send to Google Drive"
+              aria-label="Send to Google Drive"
             >
               <CloudUpload className="h-3.5 w-3.5" />
-              Send to Drive
+              <span className="max-md:hidden">Send to Drive</span>
             </button>
           )}
           {asset && canCompare(asset.asset_type, versions) && (
@@ -804,7 +806,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
               title="Compare versions"
             >
               <GitCompareArrows className="h-3.5 w-3.5" />
-              <span className="max-sm:hidden">Compare</span>
+              <span className="max-md:hidden">Compare</span>
             </button>
           )}
           <button
@@ -813,7 +815,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             title="Upload new version"
           >
             <Upload className="h-3.5 w-3.5" />
-            <span className="max-sm:hidden">New Version</span>
+            <span className="max-md:hidden">New Version</span>
           </button>
           <ShareDialog assetId={asset.id} assetName={asset.name} projectId={projectId} asset={asset} />
           <button
@@ -837,7 +839,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       </div>
 
       {/* The phone's second row: the status, which the title row gives up
-          below `sm`. It is the thing a reviewer on a phone most often changes
+          below `md`. It is the thing a reviewer on a phone most often changes
           and it used to be hidden there, with the name truncated to nothing
           beside it. The name gets the whole row's width here too. */}
       {!isSmUp && (

@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { User } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { api } from '@/lib/api'
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ProfileAvatarEditor } from '@/components/settings/profile-avatar-editor'
 import { GoogleDriveConnection } from '@/components/settings/google-drive-connection'
+import { PushNotificationsCard } from '@/components/settings/push-notifications-card'
 import { setTokens } from '@/lib/auth'
 
 export default function ProfilePage() {
@@ -222,6 +224,12 @@ export default function ProfilePage() {
       </section>
 
       <GoogleDriveConnection />
+      <PushNotificationsCard />
+      {/* The installed app has no address bar, so the diagnostic page needs a
+          way in: this is it (see docs/mobile.md, "Sizing against real devices"). */}
+      <p className="text-2xs text-text-tertiary">
+        Sizing the app for this phone? <Link href="/device" className="underline hover:text-text-primary">This device</Link> shows what it reports.
+      </p>
     </div>
   )
 }

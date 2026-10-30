@@ -14,9 +14,9 @@ projects list.
 
 What it needs on the server: nothing. `apps/web/app/manifest.ts` serves the
 manifest at `/manifest.webmanifest` (base path included), the root layout emits
-the Apple meta tags, and the icons live in `apps/web/public/icons`. There is no
-service worker on purpose: nothing works offline, and a cached app shell would
-serve a stale build after a deploy.
+the Apple meta tags, and the icons live in `apps/web/public/icons`. The service
+worker (`apps/web/public/sw.js`) exists only for push notifications: it has no
+fetch handler and caches nothing, so a deploy is never served stale.
 
 ## The phone shell
 
@@ -87,3 +87,63 @@ page never disagree about what a phone is: phone (below `md`), phone held
 sideways (same, landscape), and everything above `md`, which keeps the desktop
 layout. Safe areas come from `viewport-fit=cover` and the `*-safe` utilities;
 `.pb-tabbar` is the room a scrolling page leaves for the tab bar.
+
+## Push notifications
+
+Push mirrors the in-app notifications (the bell): a status change, a comment
+or a mention, an assignment, an approval, a Drive delivery, a due date. It
+reaches every device the user turned it on in, and it follows the choices
+under Settings → Notifications: a type set to *All Off* is never pushed
+(*In-app only* still is, since push is the in-app notification on the lock
+screen). Each push opens what the bell would: the asset with the comment
+focused, the project filtered on a bulk status, the file on Drive.
+
+### Admin setup
+
+The instance needs a VAPID key pair, generated once:
+
+```bash
+docker compose exec api python -c "import base64; from cryptography.hazmat.primitives.asymmetric import ec; from cryptography.hazmat.primitives import serialization as s; k=ec.generate_private_key(ec.SECP256R1()); b=lambda x: base64.urlsafe_b64encode(x).rstrip(b'=').decode(); print('VAPID_PUBLIC_KEY='+b(k.public_key().public_bytes(s.Encoding.X962, s.PublicFormat.UncompressedPoint))); print('VAPID_PRIVATE_KEY='+b(k.private_numbers().private_value.to_bytes(32,'big')))"
+```
+
+Put the two lines in the environment with `VAPID_SUBJECT=mailto:you@example.com`
+(or an `https://` URL), then restart `api` and `email_worker` (push rides the
+`email_low` queue, so no new service). All three or none: the api refuses to
+start on a half-set trio or a malformed key. Do not rotate the keys casually:
+every device subscribed so far stops receiving pushes until its user turns
+push off and on again. The app must be served over HTTPS.
+
+### For each person
+
+Open Settings → Profile → *Push notifications* and *Turn on for this device*;
+the browser asks for permission once. On iPhone and iPad this works only from
+the app installed on the home screen (iOS 16.4 or later), not from a Safari
+tab; the card says so. Android and desktop browsers work from the browser too.
+*Turn off* on the same card removes the device. The card lists how many
+devices are on.
+
+### How it works
+
+`POST /me/push/subscriptions` stores the browser's subscription (one row per
+browser, `push_subscriptions`); `GET /me/push` lists this user's devices and
+hands the public key out; `DELETE /me/push/subscriptions/{id}` removes one.
+Every place that writes a `Notification` row calls
+`services.push_service.notify_push` after its commit, which queues
+`tasks.push_tasks.send_push_notification` per row. The task reads the user's
+preference for the type, builds the words and the URL (the same as the web
+app's `notification-text` and `notification-target`), and sends one Web Push
+per device with `pywebpush`. A 404 or 410 from the push service deletes the
+device's row; 429 and 5xx are retried three times; any other 4xx is noted on
+the row (`last_failed_at`) and logged. Due-date reminders are pushed once a
+day per asset, although the reminder row is written hourly.
+
+### Troubleshooting
+
+- The card says "an admin has to set the push keys": `VAPID_*` are not all set.
+- The button never appears on an iPhone: the app is open in Safari, not from
+  the home screen.
+- Permission is blocked: iOS Settings → Notifications → the app, or the
+  browser's site settings; then reopen the card.
+- A device disappears from the list: the push service revoked it (the app was
+  removed, or the keys changed). Turn it on again.
+- Nothing arrives: check `email_worker`'s log for `push to … failed`.

@@ -2,6 +2,7 @@ from .celery_app import celery_app
 from ..database import SessionLocal
 from ..models.asset import Asset
 from ..models.activity import Notification, NotificationType
+from ..services.push_service import notify_push
 from datetime import datetime, timezone, timedelta
 
 
@@ -18,6 +19,7 @@ def send_due_date_reminders():
             Asset.assignee_id.isnot(None),
             Asset.deleted_at.is_(None),
         ).all()
+        notes = []
         for asset in assets:
             # Avoid duplicate reminders: check if one was sent in the last hour
             recent = db.query(Notification).filter(
@@ -27,11 +29,14 @@ def send_due_date_reminders():
                 Notification.created_at >= now - timedelta(hours=1),
             ).first()
             if not recent:
-                db.add(Notification(
+                note = Notification(
                     user_id=asset.assignee_id,
                     type=NotificationType.due_soon,
                     asset_id=asset.id,
-                ))
+                )
+                db.add(note)
+                notes.append(note)
         db.commit()
+        notify_push(db, notes)
     finally:
         db.close()

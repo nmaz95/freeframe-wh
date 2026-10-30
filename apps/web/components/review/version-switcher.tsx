@@ -60,7 +60,7 @@ export function VersionSwitcher({ versions, className }: VersionSwitcherProps) {
 
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
-      <span className="text-xs text-text-tertiary shrink-0 max-sm:hidden">Version:</span>
+      <span className="text-xs text-text-tertiary shrink-0 max-md:hidden">Version:</span>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <button className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 bg-accent text-white text-xs font-medium hover:bg-accent/90 transition-colors outline-none">

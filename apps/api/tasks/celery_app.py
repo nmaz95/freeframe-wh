@@ -19,6 +19,7 @@ celery_app = Celery(
         "apps.api.tasks.email_tasks",
         "apps.api.tasks.cleanup_tasks",
         "apps.api.tasks.drive_tasks",
+        "apps.api.tasks.push_tasks",
     ],
 )
 
@@ -42,7 +43,7 @@ celery_app.conf.update(
         Queue("default"),
         Queue("transcoding"),
         Queue("email_high"),   # Magic codes, invites - immediate
-        Queue("email_low"),    # Mentions, comments - can be delayed
+        Queue("email_low"),    # Mentions, comments, push - can be delayed
         Queue("maintenance"),  # Housekeeping - long, I/O heavy, latency-insensitive
         Queue("delivery"),     # Copies to Google Drive - network-bound, can run for a long time
     ),
@@ -77,6 +78,8 @@ celery_app.conf.update(
         "apps.api.tasks.email_tasks.send_status_change_email": {"queue": "email_low"},
         "apps.api.tasks.email_tasks.send_bulk_status_change_email": {"queue": "email_low"},
         "apps.api.tasks.email_tasks.send_project_added_email": {"queue": "email_low"},
+        # Web Push rides the low-priority email queue: same shape of work, no new worker.
+        "apps.api.tasks.push_tasks.*": {"queue": "email_low"},
     },
     # Rate limiting for email queues (SES limits)
     task_annotations={

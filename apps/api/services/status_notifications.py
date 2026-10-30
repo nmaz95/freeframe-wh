@@ -24,6 +24,7 @@ from ..services import event_service
 from ..services.permissions import can_access_asset
 from ..tasks.celery_app import send_task_safe
 from ..tasks.email_tasks import send_bulk_status_change_email, send_status_change_email
+from .push_service import notify_push
 
 # The event the project stream carries when an asset's status changes.
 STATUS_EVENT = "asset_status_updated"
@@ -322,16 +323,20 @@ def change_asset_status(db: Session, asset: Asset, new_status: AssetStatusDef, a
     recipients = _recipients_for(db, asset, rule, actor, holders, users)
 
     payload = _status_payload(new_status, from_name)
+    notes: list[Notification] = []
     for recipient in recipients:
         if recipient.in_app:
-            db.add(Notification(
+            note = Notification(
                 user_id=recipient.user_id,
                 type=NotificationType.status_change,
                 asset_id=asset.id,
                 actor_id=actor.id,
                 payload=payload,
-            ))
+            )
+            db.add(note)
+            notes.append(note)
     db.commit()
+    notify_push(db, notes)
 
     link = asset_link(asset)
     for recipient in recipients:
@@ -405,6 +410,7 @@ def change_assets_status(db: Session, assets: list[Asset], new_status: AssetStat
             per_user.setdefault(r.user_id, []).append(a)
             channels.setdefault(r.user_id, r)
 
+    notes: list[Notification] = []
     for user_id, theirs in per_user.items():
         if not channels[user_id].in_app:
             continue
@@ -418,14 +424,17 @@ def change_assets_status(db: Session, assets: list[Asset], new_status: AssetStat
                 "asset_names": [a.name for a in theirs[:BULK_NAMES_SHOWN]],
                 "project_id": str(project_id),
             }
-        db.add(Notification(
+        note = Notification(
             user_id=user_id,
             type=NotificationType.status_change,
             asset_id=theirs[0].id,
             actor_id=actor.id,
             payload=payload,
-        ))
+        )
+        db.add(note)
+        notes.append(note)
     db.commit()
+    notify_push(db, notes)
 
     for user_id, theirs in per_user.items():
         if not channels[user_id].email:

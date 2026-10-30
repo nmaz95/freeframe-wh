@@ -37,3 +37,12 @@ kombu==5.6.2
 # already present transitively, but nothing declared it, so a clean rebuild
 # could have dropped it and silently skipped the queue-topology guard.
 pyyaml==6.0.3
+# Web Push (VAPID) for tasks/push_tasks.py: encrypts the payload (http-ece,
+# RFC 8291) and signs the VAPID JWT (py-vapid, RFC 8292) over the pinned
+# cryptography. It brings `requests` (and aiohttp) along, which nothing else
+# here uses; keep that in mind before adding a second user of either.
+pywebpush==2.5.0
+# Pinned transitive: pywebpush only asks for >=1.7.0 / >=1.1.0, and these two
+# are the crypto under every push, so moves arrive as a reviewable PR.
+py-vapid==1.9.6
+http-ece==1.2.1

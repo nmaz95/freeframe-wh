@@ -37,6 +37,17 @@ def _find_env_file() -> str:
             return str(p.resolve())
     return ".env"
 
+def _b64url_decode(value: str, name: str) -> bytes:
+    """base64url without padding, as the Web Push ecosystem writes keys."""
+    import base64
+    import binascii
+    padded = value + "=" * (-len(value) % 4)
+    try:
+        return base64.urlsafe_b64decode(padded.encode("ascii"))
+    except (binascii.Error, ValueError, UnicodeEncodeError) as exc:
+        raise ValueError(f"{name} is not base64url") from exc
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=_find_env_file(),
@@ -86,6 +97,16 @@ class Settings(BaseSettings):
     # to the folders people pick under the drive.file scope.
     google_api_key: str = ""
     google_app_id: str = ""
+    # Web Push (VAPID). The key pair identifies this instance to the push
+    # services; the subject is who they may contact about it. All three or
+    # none: a half-set trio would silently leave push off. Generate a pair
+    # with the one-liner in .env.example (or docs/mobile.md). Rotating the
+    # keys orphans every device subscribed so far.
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = ""
+    # How long a push service keeps an undelivered push for an offline device.
+    push_ttl_seconds: int = 86400
     # Extra browser origins allowed by CORS, comma-separated (in addition to the
     # frontend + localhost defaults). Set to "*" to allow any origin — handy for
     # testing on a LAN via a machine's IP; do not use "*" in production.
@@ -227,6 +248,54 @@ class Settings(BaseSettings):
                     f"leave S3_ENDPOINT unset."
                 )
         return self
+
+    @field_validator("vapid_subject")
+    @classmethod
+    def _check_vapid_subject(cls, value: str) -> str:
+        value = (value or "").strip()
+        if value and not (value.startswith("mailto:") or value.startswith("https://")):
+            raise ValueError("VAPID_SUBJECT must be a mailto: address or an https:// URL")
+        return value
+
+    @field_validator("vapid_public_key")
+    @classmethod
+    def _check_vapid_public_key(cls, value: str) -> str:
+        value = (value or "").strip()
+        if value:
+            raw = _b64url_decode(value, "VAPID_PUBLIC_KEY")
+            if len(raw) != 65 or raw[0] != 0x04:
+                raise ValueError(
+                    "VAPID_PUBLIC_KEY must be the base64url form of a 65-byte uncompressed P-256 point "
+                    "(generate a pair with the one-liner in .env.example)"
+                )
+        return value
+
+    @field_validator("vapid_private_key")
+    @classmethod
+    def _check_vapid_private_key(cls, value: str) -> str:
+        value = (value or "").strip()
+        if value:
+            raw = _b64url_decode(value, "VAPID_PRIVATE_KEY")
+            if len(raw) != 32:
+                raise ValueError(
+                    "VAPID_PRIVATE_KEY must be the base64url form of the 32-byte P-256 private scalar, "
+                    "not a PEM file (generate a pair with the one-liner in .env.example)"
+                )
+        return value
+
+    @model_validator(mode="after")
+    def _check_vapid_all_or_nothing(self):
+        present = [bool(v) for v in (self.vapid_public_key, self.vapid_private_key, self.vapid_subject)]
+        if any(present) and not all(present):
+            raise ValueError(
+                "VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT go together: set all three or none"
+            )
+        return self
+
+    @property
+    def push_enabled(self) -> bool:
+        """Web Push can be sent: the VAPID key pair and subject are all set."""
+        return bool(self.vapid_public_key and self.vapid_private_key and self.vapid_subject)
 
     @property
     def google_drive_enabled(self) -> bool:

@@ -18,6 +18,7 @@ from ..schemas.asset import (
     DownloadOption, StatusCountsResponse,
 )
 from ..schemas.notification import AssignmentUpdate
+from ..services.push_service import notify_push
 from ..services.permissions import require_project_role, require_project_visible, require_asset_access, can_access_asset
 from ..services.s3_service import generate_presigned_get_url, build_download_filename
 from ..services.downloads import (
@@ -646,16 +647,19 @@ def update_assignment(
     if "due_date" in body.model_fields_set:
         asset.due_date = body.due_date
 
+    notification = None
     if "assignee_id" in body.model_fields_set and body.assignee_id is not None:
         notification = Notification(
             user_id=body.assignee_id,
             type=NotificationType.assignment,
             asset_id=asset.id,
+            actor_id=current_user.id,
         )
         db.add(notification)
 
     db.commit()
     db.refresh(asset)
+    notify_push(db, [notification])
     return _build_asset_response(asset, db)
 
 

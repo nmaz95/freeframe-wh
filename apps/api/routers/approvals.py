@@ -11,6 +11,7 @@ from ..models.approval import Approval, ApprovalStatus
 from ..models.activity import ActivityLog, ActivityAction, Notification, NotificationType
 from ..models.project import ProjectRole
 from ..schemas.approval import ApprovalCreate, ApprovalResponse
+from ..services.push_service import notify_push
 from ..services.permissions import require_asset_access, require_project_role
 from ..services import event_service
 from ..tasks.email_tasks import send_approval_email
@@ -78,8 +79,10 @@ def approve_asset(
 
     # Activity + notification to asset creator
     db.add(ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.approved))
+    note = None
     if asset.created_by != current_user.id:
-        db.add(Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset_id))
+        note = Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset_id, actor_id=current_user.id)
+        db.add(note)
         # Send approval email
         creator = db.query(User).filter(User.id == asset.created_by).first()
         if creator:
@@ -94,6 +97,7 @@ def approve_asset(
                 note=body.note,
             )
     db.commit()
+    notify_push(db, [note])
 
     event_service.publish_sync(asset.project_id, "approval_updated", {
         "asset_id": str(asset_id),
@@ -117,8 +121,10 @@ def reject_asset(
     approval = _upsert_approval(db, asset, body.version_id, current_user, ApprovalStatus.rejected, body.note)
 
     db.add(ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.rejected))
+    note = None
     if asset.created_by != current_user.id:
-        db.add(Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset_id))
+        note = Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset_id, actor_id=current_user.id)
+        db.add(note)
         # Send rejection email
         creator = db.query(User).filter(User.id == asset.created_by).first()
         if creator:
@@ -133,6 +139,7 @@ def reject_asset(
                 note=body.note,
             )
     db.commit()
+    notify_push(db, [note])
 
     event_service.publish_sync(asset.project_id, "approval_updated", {
         "asset_id": str(asset_id),

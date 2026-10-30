@@ -21,6 +21,7 @@ from ..models.integration import DeliveryStatus, DriveDelivery, GoogleConnection
 from ..models.user import User
 from ..services import event_service, google_drive
 from ..services.crypto_service import decrypt_secret
+from ..services.push_service import notify_push
 from ..services.s3_service import get_s3_client
 from .celery_app import celery_app
 
@@ -39,8 +40,8 @@ def _publish(project_id, delivery: DriveDelivery) -> bool:
     })
 
 
-def _notify(db, delivery: DriveDelivery) -> None:
-    db.add(Notification(
+def _notify(db, delivery: DriveDelivery) -> Notification:
+    note = Notification(
         user_id=delivery.user_id,
         type=NotificationType.delivery,
         asset_id=delivery.asset_id,
@@ -53,14 +54,17 @@ def _notify(db, delivery: DriveDelivery) -> None:
             "web_view_link": delivery.web_view_link,
             "error": delivery.error,
         },
-    ))
+    )
+    db.add(note)
+    return note
 
 
 def _fail(db, project_id, delivery: DriveDelivery, message: str) -> None:
     delivery.status = DeliveryStatus.failed
     delivery.error = message[:1000]
-    _notify(db, delivery)
+    note = _notify(db, delivery)
     db.commit()
+    notify_push(db, [note])
     _publish(project_id, delivery)
     log.warning("delivery %s failed: %s", delivery.id, message)
 
@@ -125,8 +129,9 @@ def deliver_to_drive(self, delivery_id: str):
         delivery.progress_percent = 100
         delivery.drive_file_id = result.get("id")
         delivery.web_view_link = result.get("webViewLink")
-        _notify(db, delivery)
+        note = _notify(db, delivery)
         db.commit()
+        notify_push(db, [note])
         _publish(project_id, delivery)
         log.info("delivery %s done: %s -> %s", delivery.id, delivery.file_name, delivery.folder_name)
     except Retry:

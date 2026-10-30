@@ -500,6 +500,22 @@ export interface GooglePickerConfig {
 }
 
 /** A folder made (or renamed) through FreeFrame, as Drive describes it. */
+/** GET /me/push: whether the instance can push, the key a browser subscribes
+ *  with, and the devices this user turned push on in. */
+export interface PushStatus {
+  enabled: boolean
+  public_key: string | null
+  subscriptions: PushSubscriptionInfo[]
+}
+
+export interface PushSubscriptionInfo {
+  id: string
+  endpoint: string
+  user_agent: string | null
+  created_at: string | null
+  last_used_at: string | null
+}
+
 export interface DriveFolder {
   id: string;
   name: string;
