@@ -86,7 +86,7 @@ export default function DevicePage() {
     : []
 
   return (
-    <div className="p-6 max-md:px-4 max-md:pt-2 max-w-xl space-y-4">
+    <div className="p-6 phone:px-4 phone:pt-2 max-w-xl space-y-4">
       <div
         ref={probeRef}
         aria-hidden="true"

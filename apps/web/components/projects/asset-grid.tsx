@@ -511,6 +511,11 @@ export function AssetGrid({
                     if (shareMode) {
                       e.stopPropagation()
                       toggleFolderSelect(folder.id)
+                    } else if (isCoarsePointer()) {
+                      // On touch a tap opens the folder, as it opens an asset:
+                      // there is no double-tap to wait for, and the checkbox
+                      // beside it is how a folder gets selected instead.
+                      onFolderOpen?.(folder)
                     } else if (!handleModifierClick('folder', folder.id, e)) {
                       rangeAnchorRef.current = itemKey('folder', folder.id)
                     }
@@ -518,11 +523,14 @@ export function AssetGrid({
                   onMouseDown={suppressShiftTextSelection}
                 >
                   <button
+                    aria-label={isFolderSelected ? `Deselect ${folder.name}` : `Select ${folder.name}`}
                     className={cn(
                       'absolute top-2 left-2 z-10 h-5 w-5 rounded border flex items-center justify-center transition-all',
                       isFolderSelected
                         ? 'bg-accent border-accent text-white opacity-100'
-                        : 'bg-black/40 border-white/30 text-transparent opacity-0 group-hover/folder:opacity-100',
+                        // Visible on touch (no hover to reveal it); on a hover
+                        // device it appears with the pointer, as before.
+                        : 'bg-black/40 border-white/30 text-transparent [@media(hover:hover)]:opacity-0 group-hover/folder:opacity-100',
                     )}
                     onClick={(e) => handleFolderCheckbox(folder.id, e)}
                   >
@@ -876,7 +884,7 @@ export function AssetGrid({
       {/* Bottom selection action bar (Frame.io style). On the phone shell it
           takes the tab bar's place at the bottom edge, in the same glass. */}
       {!shareMode && totalSelected > 0 && (
-        <div className="sticky bottom-0 z-20 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-bg-elevated px-4 py-2.5 shadow-xl max-md:fixed max-md:left-3 max-md:right-3 max-md:bottom-safe max-md:[--ff-bottom:0.625rem] max-md:z-30 max-md:ff-glass max-md:rounded-[24px] max-md:border-white/10 max-md:bg-transparent max-md:gap-x-2 max-md:px-3">
+        <div className="sticky bottom-0 z-20 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-bg-elevated px-4 py-2.5 shadow-xl phone:fixed phone:left-3 phone:right-3 phone:bottom-safe phone:[--ff-bottom:0.625rem] phone:z-30 phone:ff-glass phone:rounded-[24px] phone:border-white/10 phone:bg-transparent phone:gap-x-2 phone:px-3">
           <button onClick={clearSelection} aria-label="Clear selection" className="text-text-tertiary hover:text-text-primary transition-colors">
             <X className="h-4 w-4" />
           </button>
@@ -884,7 +892,7 @@ export function AssetGrid({
             {totalSelected} Item{totalSelected !== 1 ? 's' : ''} selected
           </span>
           {selectedTotalSize > 0 && (
-            <span className="text-xs text-text-tertiary whitespace-nowrap max-md:hidden">
+            <span className="text-xs text-text-tertiary whitespace-nowrap phone:hidden">
               &middot; {formatBytes(selectedTotalSize)}
             </span>
           )}
@@ -902,27 +910,27 @@ export function AssetGrid({
           )}
           {selectionActions.onSendToDrive && (
             <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onSendToDrive} aria-label="Send to Drive" title="Send to Drive">
-              <CloudUpload className="h-4 w-4" /> <span className="max-md:hidden">Send to Drive</span>
+              <CloudUpload className="h-4 w-4" /> <span className="phone:hidden">Send to Drive</span>
             </Button>
           )}
           {selectionActions.onDelete && (
             <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onDelete} aria-label="Delete" title="Delete">
-              <Trash2 className="h-4 w-4" /> <span className="max-md:hidden">Delete</span>
+              <Trash2 className="h-4 w-4" /> <span className="phone:hidden">Delete</span>
             </Button>
           )}
           {selectionActions.onMove && (
             <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onMove} aria-label="Move to" title="Move to">
-              <FolderInput className="h-4 w-4" /> <span className="max-md:hidden">Move to</span>
+              <FolderInput className="h-4 w-4" /> <span className="phone:hidden">Move to</span>
             </Button>
           )}
           {selectionActions.onShare && (
             <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onShare} aria-label="Share" title="Share">
-              <Share2 className="h-4 w-4" /> <span className="max-md:hidden">Share</span>
+              <Share2 className="h-4 w-4" /> <span className="phone:hidden">Share</span>
             </Button>
           )}
           {selectionActions.onDownload && (
             <Button variant="ghost" size="sm" className="gap-1.5" onClick={selectionActions.onDownload} aria-label="Download" title="Download">
-              <Download className="h-4 w-4" /> <span className="max-md:hidden">Download</span>
+              <Download className="h-4 w-4" /> <span className="phone:hidden">Download</span>
             </Button>
           )}
         </div>

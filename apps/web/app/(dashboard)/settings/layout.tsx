@@ -30,10 +30,10 @@ export default function SettingsLayout({
   const { user, isSuperAdmin } = useAuthStore()
 
   return (
-    <div className="flex h-full max-md:flex-col">
+    <div className="flex h-full phone:flex-col">
       {/* The same tabs as a row of chips on the phone, where a 224px column
           would leave no room for the page. */}
-      <nav aria-label="Settings" className="md:hidden flex gap-2 overflow-x-auto px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <nav aria-label="Settings" className="desk:hidden flex gap-2 overflow-x-auto px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {settingsNavItems.map((item) => {
           if (item.adminOnly && !isSuperAdmin) return null
           const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
@@ -55,7 +55,7 @@ export default function SettingsLayout({
         })}
       </nav>
       {/* Settings Sidebar */}
-      <aside className="w-56 border-r border-border bg-bg-secondary shrink-0 max-md:hidden">
+      <aside className="w-56 border-r border-border bg-bg-secondary shrink-0 phone:hidden">
         <div className="p-4 border-b border-border">
           <h2 className="text-sm font-semibold text-text-primary">Settings</h2>
           <p className="text-xs text-text-tertiary mt-0.5">

@@ -36,7 +36,10 @@ Below `md` the rail and the header give way to:
   desktop's left column, which is not rendered below `lg`. Between `md` and
   `lg` the chips sit inline above the grid instead.
 - **The project toolbar wraps** rather than clipping, so Share, New Folder and
-  Upload stay reachable.
+  Upload stay reachable. In the grid a folder opens with one tap on touch (as
+  an asset does), and its checkbox, always visible there, is how it is
+  selected. The status filter in the capsule is one *Status* chip with a menu
+  of every status and its count.
 - **The review page** keeps the title row and adds a second row with the
   status (which the title row gave up below `sm`) and the asset's name in
   full. The comment sheet opens at half height on a portrait phone, in the
@@ -81,12 +84,20 @@ and `prefers-contrast: more`, and fall back to solid colours where
 
 ## Layout classes
 
-`hooks/use-mobile-shell.ts` names the three classes from the two media
-queries the review screen already switches on, so the shell and the review
-page never disagree about what a phone is: phone (below `md`), phone held
-sideways (same, landscape), and everything above `md`, which keeps the desktop
-layout. Safe areas come from `viewport-fit=cover` and the `*-safe` utilities;
-`.pb-tabbar` is the room a scrolling page leaves for the tab bar.
+The phone shell applies below `md` (768 px) and, on a touch device, up to
+`lg` (1024 px): an unfolded phone, or a phone held sideways, is still a phone
+and keeps the capsule and the tab bar rather than getting the rail. The rule
+lives once in `tailwind.config.ts` as the `phone:` screen (with `desk:` as its
+exact complement) and once in `hooks/use-mobile-shell.ts` as `isPhoneShell`;
+the two must stay equal. Page internals (the comment sheet, the review's
+side column in landscape) still follow plain width breakpoints. Safe areas
+come from `viewport-fit=cover` and the `*-safe` utilities; `.pb-tabbar` is the
+room a scrolling page leaves for the tab bar.
+
+Measured in the installed app (the numbers the audit uses): iPhone 15 Pro Max
+430×873 portrait (insets 59 top, 34 bottom) and 932×430 landscape (59 each
+side, 20 bottom); iPhone Duo closed 382×678 and 594×466, open 669×869 (82 top,
+34 bottom) and 867×669 (34 bottom).
 
 ## Push notifications
 

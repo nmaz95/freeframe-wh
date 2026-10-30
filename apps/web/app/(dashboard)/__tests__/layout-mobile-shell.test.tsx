@@ -34,9 +34,9 @@ describe('the dashboard layout and the phone shell', () => {
     expect(screen.getByTestId('header')).toBeInTheDocument()
     expect(screen.getByTestId('mobile-header')).toBeInTheDocument()
     expect(screen.getByTestId('mobile-tab-bar')).toBeInTheDocument()
-    // the rail's wrapper hides below md, the tab bar's above it
-    expect(screen.getByTestId('rail').parentElement?.className).toContain('max-md:hidden')
-    expect(screen.getByTestId('mobile-tab-bar').parentElement?.className).toContain('md:hidden')
+    // the rail's wrapper hides in the phone shell, the tab bar's in the desktop one
+    expect(screen.getByTestId('rail').parentElement?.className).toContain('phone:hidden')
+    expect(screen.getByTestId('mobile-tab-bar').parentElement?.className).toContain('desk:hidden')
   })
 
   it('renders neither header nor tab bar on the asset viewer', () => {

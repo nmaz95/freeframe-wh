@@ -70,7 +70,7 @@ export default function DashboardLayout({
           a tab bar along the bottom edge. Both shells stay mounted and CSS
           picks one, so a rotation or a resize never remounts the page. The
           asset viewer renders its own chrome in either case. */}
-      <div className="contents max-md:hidden">
+      <div className="contents phone:hidden">
         <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed((c) => !c)}
@@ -80,17 +80,17 @@ export default function DashboardLayout({
       {/* Main content area */}
       <main
         className={cn(
-          "relative flex flex-1 flex-col overflow-hidden transition-[margin] duration-200 ease-spring max-md:ml-0",
+          "relative flex flex-1 flex-col overflow-hidden transition-[margin] duration-200 ease-spring phone:ml-0",
           sidebarCollapsed ? "ml-[52px]" : "ml-[220px]",
         )}
       >
         {!isAssetViewer && (
-          <div className="contents max-md:hidden">
+          <div className="contents phone:hidden">
             <Header onSearchOpen={() => setCommandOpen(true)} />
           </div>
         )}
         {!isAssetViewer && (
-          <div className="pointer-events-none absolute inset-x-3 top-safe [--ff-top:0.5rem] z-30 md:hidden">
+          <div className="pointer-events-none absolute inset-x-3 top-safe [--ff-top:0.5rem] z-30 desk:hidden">
             <MobileHeader onSearchOpen={() => setCommandOpen(true)} />
           </div>
         )}
@@ -100,7 +100,7 @@ export default function DashboardLayout({
             "relative flex-1 overflow-y-auto",
             // The page scrolls under the floating chrome, so it starts below
             // the capsule and ends above the tab bar. Only on the phone shell.
-            !isAssetViewer && "max-md:pt-safe-plus max-md:[--ff-pt:4.5rem] max-md:pb-tabbar max-md:[--ff-tabbar:5rem]",
+            !isAssetViewer && "phone:pt-safe-plus phone:[--ff-pt:4.5rem] phone:pb-tabbar phone:[--ff-tabbar:5rem]",
           )}
         >
           {children}
@@ -108,7 +108,7 @@ export default function DashboardLayout({
       </main>
 
       {!isAssetViewer && (
-        <div className="md:hidden" style={{ ["--ff-tabbar" as string]: `${TAB_BAR_PX}px` }}>
+        <div className="desk:hidden" style={{ ["--ff-tabbar" as string]: `${TAB_BAR_PX}px` }}>
           <MobileTabBar onSearchOpen={() => setCommandOpen(true)} searchOpen={commandOpen} />
         </div>
       )}
@@ -132,7 +132,7 @@ export default function DashboardLayout({
       {/* Not on the phone shell either: the tab bar owns the bottom edge
           there, and the badge floated straight over the last row of cards. */}
       {!isAssetViewer && (
-        <PoweredByBadge className="fixed bottom-safe right-safe [--ff-bottom:1rem] [--ff-right:1rem] z-20 rounded-full border border-border bg-bg-elevated/90 px-3 py-1.5 shadow-lg backdrop-blur-sm max-md:hidden" />
+        <PoweredByBadge className="fixed bottom-safe right-safe [--ff-bottom:1rem] [--ff-right:1rem] z-20 rounded-full border border-border bg-bg-elevated/90 px-3 py-1.5 shadow-lg backdrop-blur-sm phone:hidden" />
       )}
 
       <UploadsPanel railCollapsed={sidebarCollapsed} />

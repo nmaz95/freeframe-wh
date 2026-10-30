@@ -98,20 +98,29 @@ describe('MobileProjectChips', () => {
     expect(within(menu).getByRole('button', { name: 'Collapse Spot ottobre' })).toBeInTheDocument()
   })
 
-  it('shows the status counts, filters on a tap and clears on a second', async () => {
+  it('names the active status on the chip, lists every status with its count, and filters from the menu', async () => {
     const { onStatusFilter } = renderChips()
-    const group = screen.getByRole('radiogroup', { name: 'Filter by status' })
-    expect(within(group).getByRole('radio', { name: /^All/ })).toHaveAttribute('aria-checked', 'true')
-    expect(within(group).getByRole('radio', { name: /Approved/ })).toHaveTextContent('2')
-    await userEvent.click(within(group).getByRole('radio', { name: /Needs PM Review/ }))
+    const chip = screen.getByRole('button', { name: 'Filter by status' })
+    expect(chip).toHaveTextContent('Status: All')
+    expect(chip).toHaveTextContent('3')
+    await userEvent.click(chip)
+    const menu = await screen.findByRole('menu')
+    const items = within(menu).getAllByRole('menuitemradio')
+    expect(items.map((i) => i.textContent)).toEqual(['All3', 'Needs PM Review1', 'Approved2'])
+    expect(items[0]).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(within(menu).getByRole('menuitemradio', { name: /Needs PM Review/ }))
     expect(onStatusFilter).toHaveBeenCalledWith('s1')
   })
 
-  it('a tap on the active status clears the filter', async () => {
-    const { onStatusFilter } = renderChips({ statusFilter: 's1' })
-    const chip = screen.getByRole('radio', { name: /Needs PM Review/ })
-    expect(chip).toHaveAttribute('aria-checked', 'true')
+  it('shows the active status with its dot, and All clears the filter', async () => {
+    const { onStatusFilter } = renderChips({ statusFilter: 's2' })
+    const chip = screen.getByRole('button', { name: 'Filter by status' })
+    expect(chip).toHaveTextContent('Approved')
+    expect(chip).toHaveTextContent('2')
     await userEvent.click(chip)
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).getByRole('menuitemradio', { name: /Approved/ })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^All/ }))
     expect(onStatusFilter).toHaveBeenCalledWith(null)
   })
 })

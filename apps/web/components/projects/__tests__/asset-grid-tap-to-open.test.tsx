@@ -101,6 +101,39 @@ describe('AssetGrid single-tap-to-open on touch', () => {
     })
   })
 
+  describe('grid view, folders', () => {
+    const folder = { id: 'f1', name: 'Spot ottobre', project_id: 'p1', parent_id: null, item_count: 2, created_at: '2026-10-01T00:00:00Z' } as never
+
+    beforeEach(() => {
+      mockViewState.layout = 'grid'
+    })
+
+    it('a single tap opens the folder on a coarse (touch) pointer', () => {
+      setCoarsePointer(true)
+      const onFolderOpen = vi.fn()
+      render(<AssetGrid assets={[]} folders={[folder]} projectId="p1" onFolderOpen={onFolderOpen} />)
+      fireEvent.click(screen.getByText('Spot ottobre'))
+      expect(onFolderOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'f1' }))
+    })
+
+    it('a single click does not open the folder on a fine (mouse) pointer — desktop unchanged', () => {
+      setCoarsePointer(false)
+      const onFolderOpen = vi.fn()
+      render(<AssetGrid assets={[]} folders={[folder]} projectId="p1" onFolderOpen={onFolderOpen} />)
+      fireEvent.click(screen.getByText('Spot ottobre'))
+      expect(onFolderOpen).not.toHaveBeenCalled()
+    })
+
+    it('the checkbox selects the folder without opening it, on touch too', () => {
+      setCoarsePointer(true)
+      const onFolderOpen = vi.fn()
+      render(<AssetGrid assets={[]} folders={[folder]} projectId="p1" onFolderOpen={onFolderOpen} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Select Spot ottobre' }))
+      expect(onFolderOpen).not.toHaveBeenCalled()
+      expect(screen.getByRole('button', { name: 'Deselect Spot ottobre' })).toBeInTheDocument()
+    })
+  })
+
   describe('list view', () => {
     beforeEach(() => {
       mockViewState.layout = 'list'

@@ -55,7 +55,8 @@ import { mutate as globalMutate } from "swr";
 import { FolderTree } from "@/components/projects/folder-tree";
 import { MobileProjectChips } from "@/components/projects/mobile-project-chips";
 import { MobileHeaderSlot } from "@/components/layout/mobile-header";
-import { useMediaQuery, MEDIA_MD, MEDIA_LG } from "@/hooks/use-media-query";
+import { useMediaQuery, MEDIA_LG } from "@/hooks/use-media-query";
+import { useMobileShell } from "@/hooks/use-mobile-shell";
 import { ShareLinksTable } from "@/components/projects/share-links-table";
 import { ShareLinkMenuItems } from "@/components/projects/menus/share-link-menu";
 import { ContextMenuArea, DotsMenu } from "@/components/shared/item-menu";
@@ -690,9 +691,9 @@ export default function ProjectDetailPage() {
   // phone header to carry them and no left column either. Decided by the
   // same queries the layout uses, not by a hidden class, so the status
   // radiogroup exists once in the document at any width.
-  const isMdUp = useMediaQuery(MEDIA_MD);
+  const { isPhoneShell } = useMobileShell();
   const isLgUp = useMediaQuery(MEDIA_LG);
-  const chipsInline = isMdUp && !isLgUp;
+  const chipsInline = !isPhoneShell && !isLgUp;
   const mobileChipProps = {
     projectName: project?.name ?? "Project",
     tree,
@@ -962,7 +963,7 @@ export default function ProjectDetailPage() {
         className="flex-1 flex flex-col min-w-0 bg-bg-primary h-full overflow-y-auto"
         onClick={() => setSelectedAsset(null)}
       >
-        <div className="px-5 pt-3 pb-6 space-y-3 max-md:px-4 max-md:pt-12">
+        <div className="px-5 pt-3 pb-6 space-y-3 phone:px-4 phone:pt-12">
           {/* Folders and the status filter where the left column is not
               rendered: in the phone header's capsule below `md`, inline above
               the grid between `md` and `lg`. Same state as the column. */}

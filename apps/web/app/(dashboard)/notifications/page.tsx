@@ -73,12 +73,12 @@ export default function NotificationsPage() {
   const shown = tab === 'unread' ? notifications.filter((n) => !n.read) : notifications
 
   return (
-    <div className="p-6 max-md:px-4 max-md:pt-2 max-w-3xl space-y-5">
+    <div className="p-6 phone:px-4 phone:pt-2 max-w-3xl space-y-5">
       {/* Header. On the phone the capsule already says "Notifications", so
           the title is kept for the desktop and the count for both. */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-text-primary max-md:sr-only">Notifications</h1>
+          <h1 className="text-lg font-semibold text-text-primary phone:sr-only">Notifications</h1>
           {unreadCount > 0 && (
             <p className="text-sm text-text-secondary mt-0.5">
               {unreadCount} unread

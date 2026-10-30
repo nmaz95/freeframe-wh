@@ -63,6 +63,9 @@ function pathTo(tree: FolderTreeNode[], folderId: string, trail: string[]): stri
   return null
 }
 
+/** The RadioGroup value that means no status filter. */
+const ALL = '__all__'
+
 const chipClass =
   'inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium whitespace-nowrap transition-colors active:scale-[0.97]'
 const chipOff = 'border-white/10 bg-white/[0.06] text-text-secondary'
@@ -92,6 +95,7 @@ export function MobileProjectChips({
   const all = React.useMemo(() => flattenFolders(tree), [tree])
   const current = all.find((f) => f.id === currentFolderId)
   const total = Object.values(counts).reduce((a, b) => a + b, 0)
+  const activeStatus = statusFilter ? statuses.find((s) => s.id === statusFilter) ?? null : null
   // The current folder's ancestors start open, so it is in view; the rest of
   // the tree stays folded until tapped. Reset when the folder changes.
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set(ancestorsOf(tree, currentFolderId)))
@@ -131,10 +135,9 @@ export function MobileProjectChips({
           <DropdownMenu.Content
             align="start"
             sideOffset={6}
-            // Always below the chip. With the content capped at the room left
-            // under it (menuContentClass), a long tree scrolls there instead
-            // of flipping up and off the top of a short, sideways screen.
-            avoidCollisions={false}
+            // Radix may flip it above the chip on a short screen and shifts
+            // it inside the viewport's sides; either way the content is
+            // capped at the room left (menuContentClass) and scrolls.
             collisionPadding={menuCollisionPadding}
             className={cn(menuContentClass, 'min-w-[240px]')}
           >
@@ -192,36 +195,63 @@ export function MobileProjectChips({
       </DropdownMenu.Root>
 
       {statuses.length > 0 && (
-        <div role="radiogroup" aria-label="Filter by status" className="flex items-center gap-2">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={statusFilter === null}
-            onClick={() => onStatusFilter(null)}
-            className={cn(chipClass, statusFilter === null ? chipOn : chipOff)}
-          >
-            All
-            {total > 0 && <span className="tabular-nums opacity-70">{total}</span>}
-          </button>
-          {statuses.map((s) => {
-            const active = statusFilter === s.id
-            const count = counts[s.id] ?? 0
-            return (
-              <button
-                key={s.id}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => onStatusFilter(active ? null : s.id)}
-                className={cn(chipClass, active ? chipOn : chipOff)}
+        // One chip, one menu: the row of status chips had to be scrolled to
+        // reach the later statuses. The chip names the active status (with
+        // its dot) or "Status: All"; the menu lists every status with its
+        // count, All first. Picking All clears the filter.
+        <DropdownMenu.Root modal={false}>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              aria-label="Filter by status"
+              className={cn(chipClass, activeStatus ? chipOn : chipOff, 'max-w-[48%]')}
+            >
+              {activeStatus && <StatusDot color={activeStatus.color} size="sm" />}
+              <span className="truncate">{activeStatus ? activeStatus.name : 'Status: All'}</span>
+              <span className="tabular-nums opacity-70">{activeStatus ? counts[activeStatus.id] ?? 0 : total}</span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              align="start"
+              sideOffset={6}
+              collisionPadding={menuCollisionPadding}
+              className={cn(menuContentClass, 'min-w-[240px]')}
+            >
+              <DropdownMenu.RadioGroup
+                value={statusFilter ?? ALL}
+                onValueChange={(v) => onStatusFilter(v === ALL ? null : v)}
+                aria-label="Filter by status"
               >
-                <StatusDot color={s.color} size="sm" />
-                {s.name}
-                {count > 0 && <span className="tabular-nums opacity-70">{count}</span>}
-              </button>
-            )
-          })}
-        </div>
+                <DropdownMenu.RadioItem value={ALL} className={menuItemClass}>
+                  <span className="w-4 shrink-0">
+                    <DropdownMenu.ItemIndicator>
+                      <Check className="h-4 w-4" />
+                    </DropdownMenu.ItemIndicator>
+                  </span>
+                  <span className="flex-1">All</span>
+                  <span className="tabular-nums text-text-tertiary">{total}</span>
+                </DropdownMenu.RadioItem>
+                {statuses.map((s) => {
+                  const count = counts[s.id] ?? 0
+                  return (
+                    <DropdownMenu.RadioItem key={s.id} value={s.id} className={menuItemClass}>
+                      <span className="w-4 shrink-0">
+                        <DropdownMenu.ItemIndicator>
+                          <Check className="h-4 w-4" />
+                        </DropdownMenu.ItemIndicator>
+                      </span>
+                      <StatusDot color={s.color} size="md" />
+                      <span className="flex-1 truncate">{s.name}</span>
+                      {count > 0 && <span className="tabular-nums text-text-tertiary">{count}</span>}
+                    </DropdownMenu.RadioItem>
+                  )
+                })}
+              </DropdownMenu.RadioGroup>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
       )}
     </div>
   )

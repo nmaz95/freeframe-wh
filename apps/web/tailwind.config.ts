@@ -10,6 +10,15 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      // The phone shell (tab bar, capsule header, no rail) applies below `md`
+      // and, on a touch device, up to `lg`: an unfolded phone or one held
+      // sideways is still a phone. `desk` is the exact complement, so a
+      // surface is in one shell or the other, never both or neither. The JS
+      // twin is `useMobileShell().isPhoneShell`.
+      screens: {
+        phone: { raw: '(max-width: 767.98px), (pointer: coarse) and (max-width: 1023.98px)' },
+        desk: { raw: '(min-width: 1024px), (min-width: 768px) and (pointer: fine)' },
+      },
       colors: {
         bg: {
           primary: 'var(--bg-primary)',

@@ -1,10 +1,12 @@
 'use client'
 
-import { MEDIA_MD, useMediaQuery } from '@/hooks/use-media-query'
+import { MEDIA_LG, MEDIA_MD, useMediaQuery } from '@/hooks/use-media-query'
 
 /** A landscape viewport. Paired with the width below it tells a phone held
  *  sideways from a tablet: the room is horizontal, not vertical. */
 export const MEDIA_LANDSCAPE = '(orientation: landscape)'
+/** A touch screen as the main pointer. */
+export const MEDIA_COARSE = '(pointer: coarse)'
 
 /**
  * The three layout classes the mobile shell knows, from the same two media
@@ -23,8 +25,16 @@ export const MEDIA_LANDSCAPE = '(orientation: landscape)'
  * min-width query), which is the safe direction: a desktop briefly drawn
  * narrow is a flicker, a phone drawn wide is a broken first paint.
  */
-export function useMobileShell(): { isPhone: boolean; isPhoneLandscape: boolean } {
+export function useMobileShell(): { isPhone: boolean; isPhoneLandscape: boolean; isPhoneShell: boolean } {
   const isWide = useMediaQuery(MEDIA_MD)
+  const isLg = useMediaQuery(MEDIA_LG)
   const isLandscape = useMediaQuery(MEDIA_LANDSCAPE)
-  return { isPhone: !isWide, isPhoneLandscape: !isWide && isLandscape }
+  const coarse = useMediaQuery(MEDIA_COARSE)
+  return {
+    isPhone: !isWide,
+    isPhoneLandscape: !isWide && isLandscape,
+    // The JS twin of the `phone:` screen in tailwind.config.ts: below `md`, or
+    // a touch device below `lg` (an unfolded phone, a phone held sideways).
+    isPhoneShell: !isWide || (coarse && !isLg),
+  }
 }

@@ -821,7 +821,7 @@ export function UploadsPanel({
           for the same reason as the panel's offset below. */}
       <div
         className={cn(
-          'fixed top-0 right-0 bottom-0 left-[52px] z-40 max-md:left-0',
+          'fixed top-0 right-0 bottom-0 left-[52px] z-40 phone:left-0',
           !railCollapsed && 'md:left-[220px]',
         )}
         onClick={() => setPanelOpen(false)}
@@ -853,7 +853,7 @@ export function UploadsPanel({
           'fixed left-safe top-0 z-50 h-dvh w-[380px]',
           // The phone shell has no rail: the panel opens from the screen's own
           // edge and takes the width, up to a phablet's worth.
-          '[--ff-left:52px] max-md:[--ff-left:0px] max-md:w-full max-md:max-w-[420px]',
+          '[--ff-left:52px] phone:[--ff-left:0px] phone:w-full phone:max-w-[420px]',
           !railCollapsed && 'md:[--ff-left:220px]',
           'border-r border-border bg-bg-secondary shadow-2xl flex flex-col pb-safe animate-in slide-in-from-left-4 duration-150',
         )}

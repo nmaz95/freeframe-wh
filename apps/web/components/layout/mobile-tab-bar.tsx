@@ -88,20 +88,20 @@ export function MobileTabBar({ onSearchOpen, searchOpen = false }: MobileTabBarP
             where the way back always leads. */}
         <Link
           href="/projects"
-          aria-label="Projects"
           aria-current={active === 'projects' ? 'page' : undefined}
-          className="relative z-10 flex h-14 flex-1 flex-col items-center justify-center text-text-primary"
+          className={cn(stopClass, 'gap-0', active === 'projects' ? 'text-text-primary' : 'text-text-secondary')}
         >
           <span
             className={cn(
-              'flex h-[46px] w-[46px] items-center justify-center rounded-full transition-[transform,background-color] duration-200 active:scale-[0.97]',
+              'flex h-9 w-9 items-center justify-center rounded-full transition-[transform,background-color] duration-200',
               active === 'projects'
                 ? 'bg-accent text-text-inverse shadow-[0_6px_18px_rgba(0,0,0,.35),inset_0_1px_0_rgba(255,255,255,.35)]'
                 : 'bg-white/[0.08] text-text-primary',
             )}
           >
-            <Layers className="h-6 w-6" strokeWidth={2} />
+            <Layers className="h-5 w-5" strokeWidth={2} />
           </span>
+          <span>Projects</span>
         </Link>
         <TabLink
           href="/notifications"
