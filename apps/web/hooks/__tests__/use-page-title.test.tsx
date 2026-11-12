@@ -4,7 +4,7 @@
  * the part of React: they remove, insert and rewrite `<title>` elements in
  * `<head>` the way it does on a client-side navigation.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { act, render } from '@testing-library/react'
 import { usePageTitle } from '../use-page-title'
 import { BrandingProvider } from '@/components/shared/branding-provider'
@@ -161,5 +161,74 @@ describe('usePageTitle', () => {
     insertMetadataTitle('Acme')
     await settle()
     expect(document.title).toBe('Projects – Globex')
+  })
+
+  it('converges on a title the getter canonicalises (an asset name with a trailing space)', async () => {
+    // `document.title` gives back stripped and collapsed ASCII whitespace, so a
+    // written "Carron - Firenze  – FreeFrame" read back with one space and the
+    // hold rewrote it on every mutation of <head> its own write caused: an
+    // unbounded microtask loop that froze the tab. Counting the writes keeps
+    // the test failing fast rather than hanging should it regress.
+    const native = Object.getOwnPropertyDescriptor(Document.prototype, 'title')!
+    let writes = 0
+    Object.defineProperty(document, 'title', {
+      configurable: true,
+      get: () => native.get!.call(document),
+      set: (value: string) => {
+        if (++writes > 25) throw new Error('document.title written without end')
+        native.set!.call(document, value)
+      },
+    })
+    try {
+      render(<Page title={'Carron - Firenze '} />)
+      expect(document.title).toBe('Carron - Firenze – FreeFrame')
+
+      // What a full load does after the effect: React re-inserts its metadata title.
+      insertMetadataTitle('FreeFrame')
+      await settle()
+      await settle()
+      expect(document.title).toBe('Carron - Firenze – FreeFrame')
+
+      // What a dialog or a lazy chunk does: something else lands in <head>.
+      document.head.appendChild(document.createElement('style'))
+      await settle()
+      await settle()
+      expect(document.title).toBe('Carron - Firenze – FreeFrame')
+      expect(writes).toBeLessThanOrEqual(3)
+    } finally {
+      delete (document as unknown as { title?: unknown }).title
+    }
+  })
+
+  it('lets go rather than spin when a title never reads back as written', async () => {
+    // A getter that canonicalises differently from `canonicalTitle` must cost
+    // the page title, not the tab.
+    const native = Object.getOwnPropertyDescriptor(Document.prototype, 'title')!
+    let writes = 0
+    Object.defineProperty(document, 'title', {
+      configurable: true,
+      get: () => native.get!.call(document).toLowerCase(),
+      set: (value: string) => {
+        if (++writes > 50) throw new Error('document.title written without end')
+        native.set!.call(document, value)
+      },
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      render(<Page title="Projects" />)
+      // The first write lands before the hold observes; the loop needs a later
+      // change to <head>, as on a full load.
+      insertMetadataTitle('FreeFrame')
+      for (let i = 0; i < 15; i++) await settle()
+      expect(writes).toBeLessThanOrEqual(12)
+      expect(warn).toHaveBeenCalled()
+      const before = writes
+      document.head.appendChild(document.createElement('style'))
+      await settle()
+      expect(writes).toBe(before)
+    } finally {
+      warn.mockRestore()
+      delete (document as unknown as { title?: unknown }).title
+    }
   })
 })
