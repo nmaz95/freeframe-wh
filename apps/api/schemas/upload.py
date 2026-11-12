@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 import uuid
 from ..models.asset import AssetType
 from ..config import settings
@@ -127,6 +127,15 @@ def mime_to_asset_type(mime_type: str) -> AssetType:
         return AssetType.video
     raise ValueError(f"Unsupported mime type: {mime_type}")
 
+def clean_asset_name(name: str) -> str:
+    """The name an asset is stored under: `name` without leading or trailing
+    whitespace. A trailing space is invisible everywhere the name is shown and
+    once froze the review tab (the browser canonicalises `document.title`, see
+    `apps/web/hooks/use-page-title.ts`), so it is dropped at the door rather
+    than handled by every reader."""
+    return name.strip()
+
+
 class InitiateUploadRequest(BaseModel):
     project_id: uuid.UUID
     asset_name: str
@@ -140,6 +149,16 @@ class InitiateUploadRequest(BaseModel):
     # For new version of existing asset
     asset_id: uuid.UUID | None = None
     folder_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _clean_asset_name(self):
+        # A name of only spaces falls back to the file name, which is what the
+        # client sends when the user has not typed one.
+        name = clean_asset_name(self.asset_name) or clean_asset_name(self.original_filename)
+        if not name:
+            raise ValueError("an asset name cannot be empty")
+        self.asset_name = name
+        return self
 
 class InitiateUploadResponse(BaseModel):
     upload_id: str

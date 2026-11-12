@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -66,6 +66,18 @@ class AssetUpdate(BaseModel):
     assignee_id: Optional[uuid.UUID] = None
     due_date: Optional[datetime] = None
     keywords: Optional[list] = None
+
+    @field_validator("name")
+    @classmethod
+    def _clean_name(cls, v: Optional[str]) -> Optional[str]:
+        # Same rule as on upload (see `clean_asset_name` in schemas/upload.py):
+        # a rename cannot leave a space at either end, nor empty the name.
+        if v is None:
+            return None
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("an asset name cannot be empty")
+        return cleaned
 
 class StatusCountsResponse(BaseModel):
     """Assets per status id in a folder subtree; statuses with none are absent."""
